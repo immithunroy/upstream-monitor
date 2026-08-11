@@ -1,0 +1,24 @@
+import { Router } from 'express';
+import adminRouter from './admin';
+import changesRouter from './changes';
+import destinationsRouter from './destinations';
+import reportsRouter from './reports';
+import searchRouter from './search';
+import statsRouter from './stats';
+import tracesRouter from './traces';
+
+const router = Router();
+
+router.get('/health', (_req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+router.use('/admin', adminRouter);
+router.use('/destinations', destinationsRouter);
+router.use('/reports', reportsRouter);
+router.use('/changes', changesRouter);
+router.use('/traces', tracesRouter);
+router.use('/stats', statsRouter);
+router.use('/search', searchRouter);
+
+export default router;
