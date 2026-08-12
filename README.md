@@ -196,6 +196,7 @@ See `.env.example`. Key variables:
 | `RIR_REQUEST_TIMEOUT_MS` | `10000` | per RIR/RDAP request timeout |
 | `RIR_ENRICH_CONCURRENCY` | `6` | parallel lookups during bulk enrich |
 | `RIR_CACHE_TTL_HOURS` | `24` | how long an RIR attribution is kept fresh |
+| `RETENTION_DAYS` | `365` | purge trace reports / ping samples / change events older than this (runs daily at 03:00) |
 
 ## API
 

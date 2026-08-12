@@ -2,9 +2,11 @@ import cron from 'node-cron';
 import { env } from '../config/env';
 import { runScheduledTrace } from './orchestrator';
 import { runPingSweep } from './pingMonitor';
+import { runRetention } from './retention';
 
 let traceTask: cron.ScheduledTask | null = null;
 let pingTask: cron.ScheduledTask | null = null;
+let retentionTask: cron.ScheduledTask | null = null;
 
 export function startScheduler(): void {
   /* Traceroute monitoring — default once every 6 hours */
@@ -34,6 +36,18 @@ export function startScheduler(): void {
     });
     console.log(`[scheduler] ping monitoring enabled every ${env.pingIntervalMinutes} minutes`);
   }
+
+  /* Data retention — purge anything older than RETENTION_DAYS (default 1 year) */
+  if (!retentionTask) {
+    retentionTask = cron.schedule('0 3 * * *', async () => {
+      try {
+        await runRetention();
+      } catch (err) {
+        console.error('[scheduler] retention run failed:', (err as Error).message);
+      }
+    });
+    console.log(`[scheduler] data retention enabled (keep ${env.retentionDays} days, daily at 03:00)`);
+  }
 }
 
 export function stopScheduler(): void {
@@ -44,5 +58,9 @@ export function stopScheduler(): void {
   if (pingTask) {
     pingTask.stop();
     pingTask = null;
+  }
+  if (retentionTask) {
+    retentionTask.stop();
+    retentionTask = null;
   }
 }

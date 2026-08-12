@@ -40,4 +40,7 @@ export const env = {
   rirRequestTimeoutMs: int('RIR_REQUEST_TIMEOUT_MS', 10000),
   rirEnrichConcurrency: int('RIR_ENRICH_CONCURRENCY', 6),
   rirCacheTtlHours: int('RIR_CACHE_TTL_HOURS', 24),
+
+  /* Data retention: purge monitoring data older than this many days. */
+  retentionDays: int('RETENTION_DAYS', 365),
 };
