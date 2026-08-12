@@ -8,7 +8,7 @@ import { isTracingRunning } from '../services/orchestrator';
 const router = Router();
 
 router.get('/', async (_req, res) => {
-  const [destCount, enabledCount, reportCount, changeCount, criticalCount, unackedCount, latestReports] =
+  const [destCount, enabledCount, reportCount, changeCount, criticalCount, unackedCount, destIds, latestReports] =
     await Promise.all([
       Destination.countDocuments(),
       Destination.countDocuments({ enabled: true }),
@@ -16,6 +16,7 @@ router.get('/', async (_req, res) => {
       ChangeEvent.countDocuments(),
       ChangeEvent.countDocuments({ severity: 'critical' }),
       ChangeEvent.countDocuments({ acknowledged: false }),
+      Destination.find({}).select('_id').lean(),
       TraceReport.aggregate([
         { $sort: { startedAt: -1 } },
         { $group: { _id: '$destinationId', doc: { $first: '$$ROOT' } } },
@@ -23,8 +24,13 @@ router.get('/', async (_req, res) => {
       ]).sort({ startedAt: -1 }),
     ]);
 
-  const reachable = latestReports.filter((r) => r.reachable).length;
-  const unreachable = latestReports.filter((r) => !r.reachable).length;
+  // Only count reports that belong to destinations that still exist, so the
+  // recovery numbers can never exceed the number of monitored destinations.
+  const validIds = new Set(destIds.map((d) => String(d._id)));
+  const validLatest = latestReports.filter((r) => validIds.has(String(r.destinationId)));
+
+  const reachable = validLatest.filter((r) => r.reachable).length;
+  const unreachable = validLatest.filter((r) => !r.reachable).length;
 
   // 24h window: uptime % and average RTT from all reports in the last 24 hours.
   const since24h = new Date(Date.now() - 24 * 3600 * 1000);

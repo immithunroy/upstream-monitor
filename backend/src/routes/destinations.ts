@@ -99,6 +99,13 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     res.status(404).json({ error: 'Destination not found' });
     return;
   }
+  const id = dest._id as unknown as string;
+  // Cascade-delete all related data so we never leave orphaned reports behind.
+  await Promise.all([
+    TraceReport.deleteMany({ destinationId: id }),
+    ChangeEvent.deleteMany({ destinationId: id }),
+    PingSample.deleteMany({ destinationId: id }),
+  ]);
   res.json({ ok: true });
 });
 

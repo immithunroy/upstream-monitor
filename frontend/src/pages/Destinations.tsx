@@ -154,6 +154,7 @@ export default function Destinations() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-edge">
+                <th className="th">#</th>
                 <th className="th">Name</th>
                 <th className="th">Host</th>
                 <th className="th">ASN / Company</th>
@@ -164,8 +165,9 @@ export default function Destinations() {
               </tr>
             </thead>
             <tbody>
-              {dests.map((d) => (
+              {dests.map((d, i) => (
                 <tr key={d._id} className="border-b border-edge/50 hover:bg-edge/30">
+                  <td className="td font-mono text-xs text-tx3">{i + 1}</td>
                   <td className="td font-medium">
                     {d.name}
                     <div className="text-xs text-tx3">{d.description}</div>

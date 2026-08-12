@@ -123,6 +123,7 @@ export default function DestinationDetail() {
   }));
 
   const latest = reports[0];
+  const latestPing = pings.length > 0 ? pings[pings.length - 1] : null;
 
   return (
     <div className="space-y-6">
@@ -184,6 +185,22 @@ export default function DestinationDetail() {
         <div className="card">
           <div className="text-xs font-medium uppercase tracking-wide text-tx3">Resolved IP</div>
           <div className="mt-1 font-mono text-lg font-semibold text-tx">{dest.ipAddress || '—'}</div>
+          {latestPing && (
+            <div className="mt-2 flex items-end gap-2">
+              <div>
+                <div className="text-[10px] uppercase text-tx3">min</div>
+                <div className="font-mono text-xs text-emerald-600 dark:text-emerald-400">{fmtRtt(latestPing.minRtt)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase text-tx3">avg</div>
+                <div className="font-mono text-2xl font-bold text-accent">{fmtRtt(latestPing.avgRtt)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase text-tx3">max</div>
+                <div className="font-mono text-xs text-amber-600 dark:text-amber-400">{fmtRtt(latestPing.maxRtt)}</div>
+              </div>
+            </div>
+          )}
         </div>
         <div className="card">
           <div className="text-xs font-medium uppercase tracking-wide text-tx3">Prefix</div>

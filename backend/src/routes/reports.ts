@@ -46,12 +46,16 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/latest', async (_req, res) => {
-  const docs = await TraceReport.aggregate([
-    { $sort: { startedAt: -1 } },
-    { $group: { _id: '$destinationId', doc: { $first: '$$ROOT' } } },
-    { $replaceRoot: { newRoot: '$doc' } },
-  ]).sort({ startedAt: -1 });
-  res.json(docs);
+  const [destIds, docs] = await Promise.all([
+    Destination.find({}).select('_id').lean(),
+    TraceReport.aggregate([
+      { $sort: { startedAt: -1 } },
+      { $group: { _id: '$destinationId', doc: { $first: '$$ROOT' } } },
+      { $replaceRoot: { newRoot: '$doc' } },
+    ]).sort({ startedAt: -1 }),
+  ]);
+  const validIds = new Set(destIds.map((d) => String(d._id)));
+  res.json(docs.filter((r) => validIds.has(String(r.destinationId))));
 });
 
 /** Period availability / latency summary (daily, weekly, monthly, quarterly,

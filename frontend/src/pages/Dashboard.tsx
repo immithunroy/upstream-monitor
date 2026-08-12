@@ -83,7 +83,8 @@ export default function Dashboard() {
         <StatCard
           label="Avg ping (now)"
           value={stats.networkLatencyMs === null ? '—' : `${Math.round(stats.networkLatencyMs)}ms`}
-          sub="network health (all destinations)"
+          sub="network health"
+          tone="good"
           to="/destinations"
         />
         <StatCard
@@ -142,6 +143,7 @@ export default function Dashboard() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-edge">
+                <th className="th">#</th>
                 <th className="th">Destination</th>
                 <th className="th">ASN / Company</th>
                 <th className="th">Status</th>
@@ -154,13 +156,14 @@ export default function Dashboard() {
             <tbody>
               {latest.length === 0 && (
                 <tr>
-                  <td className="td" colSpan={7}>
-                    No reports yet — run a trace or wait for the hourly schedule.
+                  <td className="td" colSpan={8}>
+                    No reports yet — run a trace or wait for the schedule.
                   </td>
                 </tr>
               )}
-              {latest.map((r) => (
+              {latest.map((r, i) => (
                 <tr key={r._id} className="border-b border-edge/50 hover:bg-edge/30">
+                  <td className="td font-mono text-xs text-tx3">{i + 1}</td>
                   <td className="td font-medium">
                     <Link to={`/destination/${r.destinationId}`} className="hover:text-accent">
                       {r.destName || r.destHost}
