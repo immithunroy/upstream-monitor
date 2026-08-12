@@ -81,7 +81,7 @@ export default function Reports() {
     hop_ip_change: 'IP changed',
     hop_rtt: 'RTT shifted',
     same: 'Same',
-    none: 'ΓÇö',
+    none: '—',
   };
 
   function hopTone(change: string): string {
@@ -145,11 +145,11 @@ export default function Reports() {
 
       {tab === 'summary' ? (
         loading || !report ? (
-          <Spinner label="Loading period reportΓÇª" />
+          <Spinner label="Loading period report…" />
         ) : (
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <StatCard label="Uptime" value={overall ? `${overall.uptimePct}%` : 'ΓÇö'} sub="in period" tone={overall && overall.uptimePct < 99 ? 'warn' : 'good'} />
+              <StatCard label="Uptime" value={overall ? `${overall.uptimePct}%` : '—'} sub="in period" tone={overall && overall.uptimePct < 99 ? 'warn' : 'good'} />
               <StatCard label="Avg RTT" value={fmtRtt(overall?.avgRtt ?? null)} sub="overall average" />
               <StatCard label="Reports" value={overall?.reports ?? 0} sub={`${overall?.reachable ?? 0} reachable`} />
               <StatCard label="Change events" value={overall?.changes ?? 0} sub="detected in period" tone={overall && overall.changes ? 'warn' : 'default'} />
@@ -157,7 +157,7 @@ export default function Reports() {
 
             <div className="card">
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">
-                Network health ΓÇö {period}
+                Network health — {period}
               </h2>
               {report.series.length === 0 ? (
                 <p className="text-sm text-tx3">No data in this period yet.</p>
@@ -195,7 +195,7 @@ export default function Reports() {
 
             <div className="card">
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">
-                Destinations ΓÇö {period} ({report.destinations.length})
+                Destinations — {period} ({report.destinations.length})
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -221,7 +221,7 @@ export default function Reports() {
                           <div className="font-mono text-xs text-tx3">{d.host}</div>
                         </td>
                         <td className="td">
-                          <span className="font-mono text-xs">{d.asn ? `AS${d.asn}` : 'ΓÇö'}</span>
+                          <span className="font-mono text-xs">{d.asn ? `AS${d.asn}` : '—'}</span>
                           <div className="max-w-[200px] truncate text-xs text-tx3">{d.company || ''}</div>
                         </td>
                         <td className="td">
@@ -240,7 +240,7 @@ export default function Reports() {
           </div>
         )
       ) : loading ? (
-        <Spinner label="Loading reportsΓÇª" />
+        <Spinner label="Loading reports…" />
       ) : (
         <div className="card">
           <div className="overflow-x-auto">
@@ -269,7 +269,7 @@ export default function Reports() {
                       <span className="font-medium">{r.destName || r.destHost}</span>
                       <div className="font-mono text-xs text-tx3">{r.destHost}</div>
                     </td>
-                    <td className="td font-mono text-xs">{r.asn ? `AS${r.asn}` : 'ΓÇö'}</td>
+                    <td className="td font-mono text-xs">{r.asn ? `AS${r.asn}` : '—'}</td>
                     <td className="td">
                       {r.reachable ? <Badge label="reachable" tone="good" /> : <Badge label="unreachable" tone="critical" />}
                     </td>
@@ -306,7 +306,7 @@ export default function Reports() {
                   <span className="font-mono text-sm text-tx3">({detail.destHost})</span>
                 </h2>
                 <p className="text-xs text-tx3">
-                  {fmtDate(detail.startedAt)} ┬╖ {detail.durationMs}ms ┬╖ trigger {detail.triggeredBy}
+                  {fmtDate(detail.startedAt)} · {detail.durationMs}ms · trigger {detail.triggeredBy}
                 </p>
               </div>
               <button className="btn-ghost" onClick={() => setDetail(null)}>Close</button>
@@ -335,11 +335,11 @@ export default function Reports() {
 
             <div className="mb-4 rounded-lg bg-ink p-3 text-xs text-tx3">
               <span className="font-medium text-tx2">Destination:</span>{' '}
-              {detail.asn ? <span className="font-mono">AS{detail.asn}</span> : 'ΓÇö'}
-              {detail.company ? ` ┬╖ ${detail.company}` : ''}
+              {detail.asn ? <span className="font-mono">AS{detail.asn}</span> : '—'}
+              {detail.company ? ` · ${detail.company}` : ''}
             </div>
 
-            <h3 className="mb-2 text-sm font-semibold text-tx3">Path ΓÇö hop-by-hop vs previous report</h3>
+            <h3 className="mb-2 text-sm font-semibold text-tx3">Path — hop-by-hop vs previous report</h3>
             <div className="overflow-x-auto rounded-lg bg-ink">
               <table className="w-full">
                 <thead>
@@ -369,7 +369,7 @@ export default function Reports() {
                           </span>
                         </td>
                         <td className={`td font-mono text-xs ${d.change === 'hop_added' ? 'text-tx3' : ''}`}>
-                          {d.prevIp ?? 'ΓÇö'}
+                          {d.prevIp ?? '—'}
                           {d.prevIp && d.prevIp !== d.currIp && (
                             <div className="font-mono text-[10px] text-tx3">
                               {d.prevAsn ? `AS${d.prevAsn}` : ''} {d.prevCompany || ''}
@@ -377,7 +377,7 @@ export default function Reports() {
                           )}
                         </td>
                         <td className={`td font-mono text-xs ${d.change === 'hop_removed' ? 'text-tx3' : ''}`}>
-                          {d.currIp ?? 'ΓÇö'}
+                          {d.currIp ?? '—'}
                           <div className="font-mono text-[10px] text-tx3">
                             {d.currAsn ? `AS${d.currAsn}` : ''} {d.currCompany || ''}
                           </div>
@@ -385,12 +385,12 @@ export default function Reports() {
                         <td className="td font-mono text-xs">
                           {d.change === 'hop_ip_change' ? (
                             <span className="text-amber-600 dark:text-amber-300">
-                              {d.currAsn ? `AS${d.currAsn}` : 'ΓÇö'} ┬╖ {d.currCompany || 'unknown'}
+                              {d.currAsn ? `AS${d.currAsn}` : '—'} · {d.currCompany || 'unknown'}
                             </span>
                           ) : d.currAsn ? (
-                            <span>{`AS${d.currAsn}`} ┬╖ {d.currCompany || 'ΓÇö'}</span>
+                            <span>{`AS${d.currAsn}`} · {d.currCompany || '—'}</span>
                           ) : (
-                            'ΓÇö'
+                            '—'
                           )}
                         </td>
                         <td className="td font-mono text-xs">{fmtRtt(d.prevRtt)}</td>
@@ -401,14 +401,14 @@ export default function Reports() {
                     detail.hops.map((h) => (
                       <tr key={h.ttl} className="border-b border-edge/40">
                         <td className="td font-mono">{h.ttl}</td>
-                        <td className="td">ΓÇö</td>
-                        <td className="td font-mono text-xs">ΓÇö</td>
-                        <td className="td font-mono text-xs">{h.ip ?? 'ΓÇö'}</td>
+                        <td className="td">—</td>
+                        <td className="td font-mono text-xs">—</td>
+                        <td className="td font-mono text-xs">{h.ip ?? '—'}</td>
                         <td className="td font-mono text-xs">
-                          {h.asn ? `AS${h.asn}` : 'ΓÇö'}
-                          {h.company ? ` ┬╖ ${h.company}` : ''}
+                          {h.asn ? `AS${h.asn}` : '—'}
+                          {h.company ? ` · ${h.company}` : ''}
                         </td>
-                        <td className="td font-mono text-xs">ΓÇö</td>
+                        <td className="td font-mono text-xs">—</td>
                         <td className="td font-mono">{fmtRtt(h.avgRtt)}</td>
                       </tr>
                     ))
@@ -419,7 +419,7 @@ export default function Reports() {
 
             {!compare?.hasPrevious && compare && (
               <p className="mt-2 text-xs text-tx3">
-                No previous report to compare against yet ΓÇö run a second trace to see hop-by-hop changes.
+                No previous report to compare against yet — run a second trace to see hop-by-hop changes.
               </p>
             )}
 
