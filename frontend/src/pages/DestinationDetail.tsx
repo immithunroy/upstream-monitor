@@ -4,11 +4,13 @@ import {
   Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { api } from '../lib/api';
-import type { ChangeEvent, Destination, PingSample, TraceHop, TraceReport } from '../lib/types';
+import type { ChangeEvent, Destination, PeriodReport, PingSample, ReportPeriod, TraceHop, TraceReport } from '../lib/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import { CATEGORY_LABEL, fmtAgo, fmtDate, fmtRtt } from '../lib/format';
 import { isAuthed } from '../lib/auth';
+
+const PERIODS: ReportPeriod[] = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'yearly'];
 
 export default function DestinationDetail() {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +19,8 @@ export default function DestinationDetail() {
   const [reports, setReports] = useState<TraceReport[]>([]);
   const [events, setEvents] = useState<ChangeEvent[]>([]);
   const [pings, setPings] = useState<PingSample[]>([]);
+  const [period, setPeriod] = useState<ReportPeriod>('daily');
+  const [periodReport, setPeriodReport] = useState<PeriodReport | null>(null);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -49,6 +53,14 @@ export default function DestinationDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!id) return;
+    api
+      .periodReport(period, id)
+      .then(setPeriodReport)
+      .catch(() => setPeriodReport(null));
+  }, [period, id]);
 
   async function traceNow() {
     if (!dest) return;
@@ -120,6 +132,12 @@ export default function DestinationDetail() {
     min: p.minRtt ?? null,
     max: p.maxRtt ?? null,
     avg: p.avgRtt ?? null,
+  }));
+
+  const periodChart = (periodReport?.series ?? []).map((s) => ({
+    time: s.day,
+    avgRtt: s.avgRtt ?? null,
+    uptimePct: s.uptimePct,
   }));
 
   const latest = reports[0];
@@ -209,13 +227,60 @@ export default function DestinationDetail() {
       </div>
 
       <div className="card">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-tx3">
+            Latency history
+          </h2>
+          <div className="flex gap-1">
+            {PERIODS.map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  period === p ? 'bg-accent text-white' : 'text-tx2 hover:bg-edge/60'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+        {periodChart.length === 0 ? (
+          <p className="text-sm text-tx3">No data in this period yet.</p>
+        ) : (
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={periodChart}>
+                <defs>
+                  <linearGradient id="perGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="rgb(var(--c-accent))" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="rgb(var(--c-accent))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--c-edge))" />
+                <XAxis dataKey="time" stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} />
+                <YAxis yAxisId="rtt" stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} width={44} />
+                <YAxis yAxisId="up" orientation="right" domain={[0, 100]} stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} width={36} />
+                <Tooltip
+                  contentStyle={{ background: 'rgb(var(--c-panel))', border: '1px solid rgb(var(--c-edge))', borderRadius: 8, color: 'rgb(var(--c-tx))' }}
+                  labelStyle={{ color: 'rgb(var(--c-tx2))' }}
+                />
+                <Area yAxisId="rtt" type="monotone" dataKey="avgRtt" stroke="rgb(var(--c-accent))" strokeWidth={2} fill="url(#perGrad)" name="Avg RTT (ms)" connectNulls />
+                <Line yAxisId="up" type="monotone" dataKey="uptimePct" stroke="#10b981" strokeWidth={2} dot={false} name="Uptime %" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">
-          Ping latency — {pings.length} samples (every 5 min)
+          Ping samples — {pings.length} (every 5 min)
         </h2>
         {pingChart.length === 0 ? (
           <p className="text-sm text-tx3">No ping samples yet — samples are recorded every 5 minutes.</p>
         ) : (
-          <div className="h-64">
+          <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={pingChart}>
                 <defs>

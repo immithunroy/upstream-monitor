@@ -4,27 +4,37 @@ import {
   Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { api } from '../lib/api';
-import type { Stats, TraceReport, TrendPoint } from '../lib/types';
+import type { PeriodReport, ReportPeriod, Stats, TraceReport } from '../lib/types';
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import { fmtAgo, fmtRtt } from '../lib/format';
 
+const PERIODS: ReportPeriod[] = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'yearly'];
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [latest, setLatest] = useState<TraceReport[]>([]);
-  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [period, setPeriod] = useState<ReportPeriod>('daily');
+  const [periodReport, setPeriodReport] = useState<PeriodReport | null>(null);
   const [error, setError] = useState('');
 
   async function load() {
     try {
-      const [s, l, t] = await Promise.all([api.stats(), api.latestReports(), api.statsTrend(24)]);
+      const [s, l] = await Promise.all([api.stats(), api.latestReports()]);
       setStats(s);
       setLatest(l);
-      setTrend(t);
       setError('');
     } catch (e) {
       setError((e as Error).message);
+    }
+  }
+
+  async function loadPeriod() {
+    try {
+      setPeriodReport(await api.periodReport(period));
+    } catch {
+      setPeriodReport(null);
     }
   }
 
@@ -33,6 +43,10 @@ export default function Dashboard() {
     const timer = setInterval(load, 30000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    loadPeriod();
+  }, [period]);
 
   if (error && !stats) {
     return (
@@ -44,8 +58,8 @@ export default function Dashboard() {
 
   if (!stats) return <Spinner label="Loading dashboard…" />;
 
-  const chartData = trend.map((p) => ({
-    time: new Date(p.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  const chartData = (periodReport?.series ?? []).map((p) => ({
+    time: p.day,
     avgRtt: p.avgRtt ?? null,
     uptimePct: p.uptimePct,
   }));
@@ -97,13 +111,23 @@ export default function Dashboard() {
       </div>
 
       <div className="card">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-tx3">
-            Network health — last 24 hours
+            Network health
           </h2>
-          <span className="text-xs text-tx3">
-            avg latency across destinations
-          </span>
+          <div className="flex gap-1">
+            {PERIODS.map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  period === p ? 'bg-accent text-white' : 'text-tx2 hover:bg-edge/60'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
         {chartData.length === 0 ? (
           <p className="text-sm text-tx3">
