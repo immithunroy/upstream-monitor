@@ -21,8 +21,10 @@ export default function Layout() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
           <NavLink to="/" className="flex items-center gap-2.5">
             <img src="/logo.png" alt="Upstream Monitor" className="h-8 w-8 rounded-lg object-contain" />
-            <span className="text-sm font-semibold tracking-tight text-tx">
-              Upstream Monitor
+            <span className="text-sm font-semibold leading-tight tracking-tight text-tx">
+              Upstream
+              <br />
+              Monitor
             </span>
           </NavLink>
 

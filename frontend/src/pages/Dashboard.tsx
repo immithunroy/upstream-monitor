@@ -8,7 +8,7 @@ import type { PeriodReport, ReportPeriod, Stats, TraceReport } from '../lib/type
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
-import { fmtAgo, fmtRtt } from '../lib/format';
+import { fmtAgo, fmtRtt, periodTick } from '../lib/format';
 
 const PERIODS: ReportPeriod[] = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'yearly'];
 
@@ -78,9 +78,6 @@ export default function Dashboard() {
             )}
           </p>
         </div>
-        <button className="btn-primary" onClick={() => api.runTrace()} disabled={stats.tracingRunning}>
-          {stats.tracingRunning ? 'Tracing…' : 'Run full trace now'}
-        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -144,7 +141,7 @@ export default function Dashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--c-edge))" />
-                <XAxis dataKey="time" stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} />
+                <XAxis dataKey="time" stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} tickFormatter={(v) => periodTick(period, v)} />
                 <YAxis yAxisId="rtt" stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} width={44} />
                 <YAxis yAxisId="up" orientation="right" domain={[0, 100]} stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} width={36} />
                 <Tooltip

@@ -24,3 +24,25 @@ export const CATEGORY_LABEL: Record<string, string> = {
   utility: 'Utility',
   cdn: 'CDN',
 };
+
+/** Period-aware x-axis label for the day-bucketed period series. */
+export function periodTick(period: string, day: string): string {
+  const d = new Date(`${day}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return day;
+  switch (period) {
+    case 'daily':
+      return d.toLocaleDateString([], { weekday: 'short' });
+    case 'weekly':
+      return d.toLocaleDateString([], { weekday: 'short' });
+    case 'monthly':
+      return d.toLocaleDateString([], { month: 'short' });
+    case 'quarterly':
+      return d.toLocaleDateString([], { month: 'short' });
+    case 'half-yearly':
+      return d.toLocaleDateString([], { month: 'short' });
+    case 'yearly':
+      return d.toLocaleDateString([], { month: 'short' });
+    default:
+      return d.toLocaleDateString([], { month: 'short' });
+  }
+}

@@ -8,7 +8,7 @@ import type { Destination, PeriodReport, ReportCompare, ReportPeriod, TraceRepor
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import StatCard from '../components/StatCard';
-import { fmtDate, fmtRtt } from '../lib/format';
+import { fmtDate, fmtRtt, periodTick } from '../lib/format';
 
 const PERIODS: ReportPeriod[] = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'yearly'];
 
@@ -111,15 +111,10 @@ export default function Reports() {
               <option key={d._id} value={d._id}>{d.name} ({d.host})</option>
             ))}
           </select>
-          {tab === 'summary' && (
-            <select className="input w-36" value={period} onChange={(e) => setPeriod(e.target.value as ReportPeriod)}>
-              {PERIODS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          )}
         </div>
       </div>
 
-      <div className="flex gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         {(['summary', 'raw'] as const).map((t) => (
           <button
             key={t}
@@ -131,6 +126,21 @@ export default function Reports() {
             {t === 'summary' ? 'Summary' : 'Raw reports'}
           </button>
         ))}
+        {tab === 'summary' && (
+          <div className="ml-2 flex gap-1">
+            {PERIODS.map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  period === p ? 'bg-accent text-white' : 'text-tx2 hover:bg-edge/60'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {tab === 'summary' ? (
@@ -168,7 +178,7 @@ export default function Reports() {
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--c-edge))" />
-                      <XAxis dataKey="day" stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} />
+                      <XAxis dataKey="day" stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} tickFormatter={(v) => periodTick(period, v)} />
                       <YAxis yAxisId="rtt" stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} width={44} />
                       <YAxis yAxisId="up" orientation="right" domain={[0, 100]} stroke="rgb(var(--c-tx3))" fontSize={11} tick={{ fill: 'rgb(var(--c-tx3))' }} width={36} />
                       <Tooltip

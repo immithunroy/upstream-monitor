@@ -128,6 +128,12 @@ export default function Destinations() {
     alert(`Trace completed for ${d.name}. Check Reports.`);
   }
 
+  async function traceAll() {
+    await api.runTrace();
+    alert('Full trace completed for all destinations.');
+    await load();
+  }
+
   if (loading) return <Spinner label="Loading destinations…" />;
 
   return (
@@ -143,6 +149,7 @@ export default function Destinations() {
           <button className="btn-ghost" onClick={enrich} disabled={enriching}>
             {enriching ? 'Enriching…' : 'Enrich ASN / company'}
           </button>
+          <button className="btn-ghost" onClick={traceAll}>Run full trace</button>
           <button className="btn-primary" onClick={openCreate}>+ Add destination</button>
         </div>
       </div>
