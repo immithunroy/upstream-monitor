@@ -1,60 +1,43 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { api } from '../lib/api';
-import type { ChangeEvent, Destination, ReportCompare, TraceHop, TraceReport } from '../lib/types';
+import type { ChangeEvent, Destination, PingSample, TraceHop, TraceReport } from '../lib/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import { CATEGORY_LABEL, fmtAgo, fmtDate, fmtRtt } from '../lib/format';
-
-const HOP_CHANGE_LABEL: Record<string, string> = {
-  hop_added: 'New hop',
-  hop_removed: 'Hop gone',
-  hop_ip_change: 'IP changed',
-  hop_rtt: 'RTT shifted',
-  same: 'Same',
-  none: '—',
-};
-
-function hopTone(change: string): string {
-  switch (change) {
-    case 'hop_added':
-    case 'hop_removed':
-    case 'hop_ip_change':
-      return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
-    case 'hop_rtt':
-      return 'bg-sky-500/15 text-sky-700 dark:text-sky-300';
-    default:
-      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
-  }
-}
+import { isAuthed } from '../lib/auth';
 
 export default function DestinationDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [dest, setDest] = useState<Destination | null>(null);
   const [reports, setReports] = useState<TraceReport[]>([]);
   const [events, setEvents] = useState<ChangeEvent[]>([]);
-  const [selectedReportId, setSelectedReportId] = useState<string>('');
-  const [compare, setCompare] = useState<ReportCompare | null>(null);
-  const [compareLoading, setCompareLoading] = useState(false);
+  const [pings, setPings] = useState<PingSample[]>([]);
+  const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [tracing, setTracing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const authed = isAuthed();
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
-      const [d, r, e] = await Promise.all([
+      const [d, r, e, p] = await Promise.all([
         api.getDestination(id),
-        api.listReports({ destinationId: id, limit: 24 }),
+        api.listReports({ destinationId: id, limit: 100 }),
         api.listChanges({ destinationId: id, limit: 10 }),
+        api.listPings(id, 1000),
       ]);
       setDest(d);
       setReports(r.data);
       setEvents(e.data);
-      if (r.data.length > 0 && !selectedReportId) setSelectedReportId(r.data[0]._id);
+      setPings(p);
       setError('');
     } catch (err) {
       setError((err as Error).message);
@@ -67,15 +50,64 @@ export default function DestinationDetail() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (!selectedReportId) return;
-    setCompareLoading(true);
-    api
-      .compareReport(selectedReportId)
-      .then(setCompare)
-      .catch(() => setCompare(null))
-      .finally(() => setCompareLoading(false));
-  }, [selectedReportId]);
+  async function traceNow() {
+    if (!dest) return;
+    setTracing(true);
+    setError('');
+    try {
+      await api.runTrace(dest._id);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setTracing(false);
+    }
+  }
+
+  async function deleteAllData() {
+    if (!dest) return;
+    if (!window.confirm(`Delete ALL trace reports, change events and ping samples for ${dest.name} (${dest.host})? This cannot be undone.`)) {
+      return;
+    }
+    setDeleting(true);
+    setError('');
+    try {
+      await api.deleteDestinationData(dest._id);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function exportTraceText(report: TraceReport): string {
+    const lines: string[] = [];
+    lines.push(`Upstream Monitor — Network path export`);
+    lines.push(`Destination: ${report.destName || report.destHost}`);
+    lines.push(`Host: ${report.destHost}`);
+    lines.push(`Trace time: ${fmtDate(report.startedAt)}`);
+    lines.push(`Result: ${report.reachable ? 'reachable' : 'unreachable'}`);
+    lines.push(
+      `Ping: min=${fmtRtt(report.ping.minRtt)} max=${fmtRtt(report.ping.maxRtt)} avg=${fmtRtt(report.ping.avgRtt)} loss=${report.ping.lossPercent}%`
+    );
+    lines.push('');
+    lines.push('TTL\tIP\tASN\tCompany\tAvg RTT');
+    for (const h of report.hops) {
+      lines.push(`${h.ttl}\t${h.ip ?? '*'}${h.host ? ` (${h.host})` : ''}\t${h.asn ? `AS${h.asn}` : '—'}\t${h.company || '—'}\t${fmtRtt(h.avgRtt)}`);
+    }
+    return lines.join('\n');
+  }
+
+  function downloadTrace(report: TraceReport) {
+    const blob = new Blob([exportTraceText(report)], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trace-${report.destHost}-${report.startedAt.slice(0, 16).replace(/[:T]/g, '-')}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   if (loading) return <Spinner label="Loading destination…" />;
 
@@ -83,13 +115,12 @@ export default function DestinationDetail() {
     return <div className="card text-red-600 dark:text-red-300">{error || 'Destination not found.'}</div>;
   }
 
-  const chart = reports
-    .slice()
-    .reverse()
-    .map((r) => ({
-      time: new Date(r.startedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      avgRtt: r.ping.avgRtt ?? null,
-    }));
+  const pingChart = pings.map((p) => ({
+    time: new Date(p.sampledAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    min: p.minRtt ?? null,
+    max: p.maxRtt ?? null,
+    avg: p.avgRtt ?? null,
+  }));
 
   const latest = reports[0];
 
@@ -110,14 +141,27 @@ export default function DestinationDetail() {
           </p>
           {dest.description && <p className="mt-1 text-sm text-tx3">{dest.description}</p>}
         </div>
-        {latest && (
-          <div className="text-right">
-            <span className={latest.reachable ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
-              {latest.reachable ? 'Reachable' : 'Unreachable'}
-            </span>
-            <div className="text-xs text-tx3">{fmtAgo(latest.startedAt)}</div>
-          </div>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          {latest && (
+            <div className="text-right">
+              <span className={latest.reachable ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+                {latest.reachable ? 'Reachable' : 'Unreachable'}
+              </span>
+              <div className="text-xs text-tx3">{fmtAgo(latest.startedAt)}</div>
+            </div>
+          )}
+          {authed && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button className="btn-primary" onClick={traceNow} disabled={tracing}>
+                {tracing ? 'Tracing…' : 'Trace now'}
+              </button>
+              <button className="btn-ghost" onClick={() => navigate(`/destinations?edit=${dest._id}`)}>Edit destination</button>
+              <button className="btn-ghost text-red-600 dark:text-red-400" onClick={deleteAllData} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete all data'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -148,15 +192,17 @@ export default function DestinationDetail() {
       </div>
 
       <div className="card">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">RTT history — last 24 reports</h2>
-        {chart.length === 0 ? (
-          <p className="text-sm text-tx3">No trace reports yet.</p>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">
+          Ping latency — {pings.length} samples (every 5 min)
+        </h2>
+        {pingChart.length === 0 ? (
+          <p className="text-sm text-tx3">No ping samples yet — samples are recorded every 5 minutes.</p>
         ) : (
-          <div className="h-56">
+          <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chart}>
+              <ComposedChart data={pingChart}>
                 <defs>
-                  <linearGradient id="destGrad" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="pingGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="rgb(var(--c-accent))" stopOpacity={0.4} />
                     <stop offset="95%" stopColor="rgb(var(--c-accent))" stopOpacity={0} />
                   </linearGradient>
@@ -168,8 +214,10 @@ export default function DestinationDetail() {
                   contentStyle={{ background: 'rgb(var(--c-panel))', border: '1px solid rgb(var(--c-edge))', borderRadius: 8, color: 'rgb(var(--c-tx))' }}
                   labelStyle={{ color: 'rgb(var(--c-tx2))' }}
                 />
-                <Area type="monotone" dataKey="avgRtt" stroke="rgb(var(--c-accent))" strokeWidth={2} fill="url(#destGrad)" name="Avg RTT (ms)" connectNulls />
-              </AreaChart>
+                <Area type="monotone" dataKey="min" stroke="#10b981" strokeWidth={1.5} fill="none" name="min (ms)" connectNulls />
+                <Line type="monotone" dataKey="avg" stroke="rgb(var(--c-accent))" strokeWidth={2} dot={false} name="avg (ms)" connectNulls />
+                <Area type="monotone" dataKey="max" stroke="#f59e0b" strokeWidth={1.5} fill="none" name="max (ms)" connectNulls />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         )}
@@ -205,98 +253,83 @@ export default function DestinationDetail() {
         <div className="card">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-tx3">Network path — hop-by-hop</h2>
-            {reports.length > 0 && (
-              <select
-                className="input w-64"
-                value={selectedReportId}
-                onChange={(e) => setSelectedReportId(e.target.value)}
-              >
-                {reports.map((r) => (
-                  <option key={r._id} value={r._id}>{fmtDate(r.startedAt)} — {r.reachable ? 'reachable' : 'unreachable'} ({fmtRtt(r.ping.avgRtt)})</option>
-                ))}
-              </select>
-            )}
           </div>
 
           {reports.length === 0 ? (
             <p className="text-sm text-tx3">No trace reports yet.</p>
-          ) : compareLoading ? (
-            <Spinner label="Loading path…" />
           ) : (
-            <div className="space-y-4">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-edge">
-                      <th className="th">TTL</th>
-                      <th className="th">Change</th>
-                      <th className="th">Previous IP</th>
-                      <th className="th">Current IP</th>
-                      <th className="th">ASN / Company</th>
-                      <th className="th">Prev RTT</th>
-                      <th className="th">Curr RTT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {compare?.diff?.length ? (
-                      compare.diff.map((d) => (
-                        <tr
-                          key={d.ttl}
-                          className={`border-b border-edge/40 ${d.change === 'same' ? '' : 'bg-amber-500/5'}`}
+            <div className="space-y-2">
+              {reports.map((r) => {
+                const expanded = expandedReportId === r._id;
+                return (
+                  <div key={r._id} className="overflow-hidden rounded-lg border border-edge bg-ink/40">
+                    <button
+                      className="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-edge/30"
+                      onClick={() => setExpandedReportId(expanded ? null : r._id)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs ${expanded ? 'rotate-90' : ''} transition-transform text-tx3`}>▶</span>
+                        <span className="text-xs font-medium text-tx">{fmtDate(r.startedAt)}</span>
+                        {r.reachable ? (
+                          <Badge label="reachable" tone="good" />
+                        ) : (
+                          <Badge label="unreachable" tone="critical" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-tx3">
+                        <span className="font-mono">avg {fmtRtt(r.ping.avgRtt)}</span>
+                        <span>{r.ping.lossPercent}% loss</span>
+                        <span>{r.hops.length} hops</span>
+                        <span>{r.triggeredBy === 'manual' ? 'manual' : 'scheduled'}</span>
+                        <button
+                          className="btn-ghost !px-2 !py-0.5"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            downloadTrace(r);
+                          }}
+                          title="Download trace as text"
                         >
-                          <td className="td font-mono">{d.ttl}</td>
-                          <td className="td">
-                            <span className={`inline-block rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold ${hopTone(d.change)}`}>
-                              {HOP_CHANGE_LABEL[d.change] ?? d.change}
-                            </span>
-                          </td>
-                          <td className={`td font-mono text-xs ${d.change === 'hop_added' ? 'text-tx3' : ''}`}>
-                            {d.prevIp ?? '—'}
-                            {d.prevIp && d.prevIp !== d.currIp && (
-                              <div className="font-mono text-[10px] text-tx3">
-                                {d.prevAsn ? `AS${d.prevAsn}` : ''} {d.prevCompany || ''}
-                              </div>
-                            )}
-                          </td>
-                          <td className={`td font-mono text-xs ${d.change === 'hop_removed' ? 'text-tx3' : ''}`}>
-                            {d.currIp ?? '—'}
-                            <div className="font-mono text-[10px] text-tx3">
-                              {d.currAsn ? `AS${d.currAsn}` : ''} {d.currCompany || ''}
-                            </div>
-                          </td>
-                          <td className="td font-mono text-xs">
-                            {d.currAsn ? `AS${d.currAsn}` : '—'}
-                            {d.currCompany ? ` · ${d.currCompany}` : ''}
-                          </td>
-                          <td className="td font-mono text-xs">{fmtRtt(d.prevRtt)}</td>
-                          <td className="td font-mono">{fmtRtt(d.currRtt)}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      (compare?.current?.hops as TraceHop[] | undefined ?? []).map((h) => (
-                        <tr key={h.ttl} className="border-b border-edge/40">
-                          <td className="td font-mono">{h.ttl}</td>
-                          <td className="td">—</td>
-                          <td className="td font-mono text-xs">—</td>
-                          <td className="td font-mono text-xs">{h.ip ?? '—'}</td>
-                          <td className="td font-mono text-xs">
-                            {h.asn ? `AS${h.asn}` : '—'}
-                            {h.company ? ` · ${h.company}` : ''}
-                          </td>
-                          <td className="td font-mono text-xs">—</td>
-                          <td className="td font-mono">{fmtRtt(h.avgRtt)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                          Export
+                        </button>
+                      </div>
+                    </button>
 
-              {compare && !compare.hasPrevious && (
-                <p className="text-xs text-tx3">
-                  No previous report to compare against — run a second trace to see hop-by-hop changes.
-                </p>
-              )}
+                    {expanded && (
+                      <div className="overflow-x-auto border-t border-edge">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-edge">
+                              <th className="th">TTL</th>
+                              <th className="th">IP</th>
+                              <th className="th">ASN / Company</th>
+                              <th className="th">Avg RTT</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {r.hops.length === 0 ? (
+                              <tr>
+                                <td className="td text-tx3" colSpan={4}>No hops captured (unreachable).</td>
+                              </tr>
+                            ) : (
+                              r.hops.map((h: TraceHop) => (
+                                <tr key={h.ttl} className="border-b border-edge/40">
+                                  <td className="td font-mono">{h.ttl}</td>
+                                  <td className="td font-mono text-xs">{h.ip ?? '—'}</td>
+                                  <td className="td font-mono text-xs">
+                                    {h.asn ? `AS${h.asn}` : '—'}
+                                    {h.company ? ` · ${h.company}` : ''}
+                                  </td>
+                                  <td className="td font-mono">{fmtRtt(h.avgRtt)}</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -1,6 +1,6 @@
 import { getToken } from './auth';
 import type {
-  ChangeEvent, Destination, Paginated, PeriodReport, ReportCompare, ReportPeriod, SearchResults, Stats,
+  ChangeEvent, Destination, Paginated, PeriodReport, PingSample, ReportCompare, ReportPeriod, SearchResults, Stats,
   TraceReport, TrendPoint,
 } from './types';
 
@@ -38,6 +38,11 @@ export const api = {
   updateDestination: (id: string, body: Partial<Destination>) =>
     request<Destination>(`/destinations/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteDestination: (id: string) => request<{ ok: boolean }>(`/destinations/${id}`, { method: 'DELETE' }),
+  deleteDestinationData: (id: string) =>
+    request<{ ok: boolean; deleted: { reports: number; changes: number; pings: number } }>(
+      `/destinations/${id}/data`,
+      { method: 'DELETE' }
+    ),
   enrichDestinations: () =>
     request<{ total: number; enriched: number; failed: number }>('/destinations/enrich', { method: 'POST' }),
 
@@ -67,6 +72,14 @@ export const api = {
   },
   acknowledgeChange: (id: string) =>
     request<ChangeEvent>(`/changes/${id}/acknowledge`, { method: 'POST' }),
+  acknowledgeAllChanges: (destinationId?: string) =>
+    request<{ acknowledged: number }>('/changes/acknowledge-all', {
+      method: 'POST',
+      body: JSON.stringify(destinationId ? { destinationId } : {}),
+    }),
+
+  listPings: (destinationId: string, limit = 500) =>
+    request<PingSample[]>(`/pings/${destinationId}?limit=${limit}`),
 
   runTrace: (destinationId?: string) =>
     request<{ reportId?: string; traced?: number; changesDetected?: number; changeCount?: number; error?: string }>(

@@ -1,0 +1,58 @@
+import { Destination } from '../models/Destination';
+import { PingSample } from '../models/PingSample';
+import { runPing } from './traceroute';
+import { env } from '../config/env';
+
+/**
+ * Runs a 10-packet ping sweep against every enabled destination and stores the
+ * min / max / avg latency as a PingSample (used by the destination page graphs).
+ */
+export async function runPingSweep(): Promise<number> {
+  const dests = await Destination.find({ enabled: true }).sort({ name: 1 }).lean();
+  let samples = 0;
+  for (const dest of dests) {
+    try {
+      const ping = await runPing(dest.host);
+      await PingSample.create({
+        destinationId: dest._id,
+        destHost: dest.host,
+        destName: dest.name,
+        success: ping.success,
+        minRtt: ping.minRtt,
+        maxRtt: ping.maxRtt,
+        avgRtt: ping.avgRtt,
+        lossPercent: ping.lossPercent,
+        packetsSent: ping.packetsSent,
+        packetsReceived: ping.packetsReceived,
+        sampledAt: new Date(),
+      });
+      samples += 1;
+    } catch (err) {
+      console.error(`[ping] ${dest.host} failed:`, (err as Error).message);
+    }
+  }
+  if (samples > 0) {
+    console.log(`[ping] sweep complete: ${samples}/${dests.length} destinations sampled`);
+  }
+  return samples;
+}
+
+/** Immediately samples a single destination (fire from the trace-now button). */
+export async function sampleDestinationNow(destHost: string): Promise<void> {
+  const ping = await runPing(destHost);
+  const dest = await Destination.findOne({ host: destHost }).lean();
+  if (!dest) return;
+  await PingSample.create({
+    destinationId: dest._id,
+    destHost: dest.host,
+    destName: dest.name,
+    success: ping.success,
+    minRtt: ping.minRtt,
+    maxRtt: ping.maxRtt,
+    avgRtt: ping.avgRtt,
+    lossPercent: ping.lossPercent,
+    packetsSent: ping.packetsSent,
+    packetsReceived: ping.packetsReceived,
+    sampledAt: new Date(),
+  });
+}

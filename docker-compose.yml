@@ -26,9 +26,10 @@ services:
       NODE_ENV: production
       PORT: 5020
       MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-change-me-mongo-password}@mongodb:27017/upstream_monitor?authSource=admin
-      TRACE_CRON: 0 * * * *
-      PING_COUNT: 4
+      TRACE_CRON: 0 */6 * * *
+      PING_COUNT: 10
       PING_TIMEOUT_MS: 2500
+      PING_INTERVAL_MINUTES: 5
       TRACEROUTE_MAX_HOPS: 30
       TRACEROUTE_TIMEOUT_SECONDS: 4
       RTT_CHANGE_PERCENT_THRESHOLD: 30

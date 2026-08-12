@@ -93,9 +93,26 @@ export interface Stats {
   unacknowledgedChanges: number;
   lastScheduledRunAt: string | null;
   recovery: { reachable: number; unreachable: number };
+  networkLatencyMs: number | null;
+  pingRecovery: { reachable: number; unreachable: number };
   uptime24h: number | null;
   avgRtt24h: number | null;
   tracingRunning: boolean;
+}
+
+export interface PingSample {
+  _id: string;
+  destinationId: string;
+  destHost: string;
+  destName: string;
+  success: boolean;
+  minRtt: number | null;
+  maxRtt: number | null;
+  avgRtt: number | null;
+  lossPercent: number;
+  packetsSent: number;
+  packetsReceived: number;
+  sampledAt: string;
 }
 
 export interface TrendPoint {

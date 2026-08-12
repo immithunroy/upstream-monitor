@@ -70,25 +70,28 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Destinations" value={stats.enabledDestinations} sub={`${stats.destinations} total`} />
-        <StatCard label="Reachable" value={stats.recovery.reachable} sub="from latest reports" tone="good" />
-        <StatCard label="Unreachable" value={stats.recovery.unreachable} sub="from latest reports" tone={stats.recovery.unreachable ? 'bad' : 'default'} />
+        <StatCard label="Destinations" value={stats.enabledDestinations} sub={`${stats.destinations} total`} to="/destinations" />
+        <StatCard label="Reachable" value={stats.recovery.reachable} sub="from latest traces" tone="good" to="/reports" />
+        <StatCard label="Unreachable" value={stats.recovery.unreachable} sub="from latest traces" tone={stats.recovery.unreachable ? 'bad' : 'default'} to="/reports" />
         <StatCard
           label="Uptime (24h)"
           value={stats.uptime24h === null ? '—' : `${stats.uptime24h}%`}
           sub="across all destinations"
           tone={stats.uptime24h !== null && stats.uptime24h < 99 ? 'warn' : 'good'}
+          to="/reports"
         />
         <StatCard
-          label="Avg RTT (24h)"
-          value={fmtRtt(stats.avgRtt24h)}
-          sub="overall average"
+          label="Avg ping (now)"
+          value={stats.networkLatencyMs === null ? '—' : `${Math.round(stats.networkLatencyMs)}ms`}
+          sub="network health (all destinations)"
+          to="/destinations"
         />
         <StatCard
           label="Unacked changes"
           value={stats.unacknowledgedChanges}
           sub={`${stats.criticalChanges} critical`}
           tone={stats.unacknowledgedChanges ? 'warn' : 'default'}
+          to="/changes"
         />
       </div>
 
@@ -98,17 +101,12 @@ export default function Dashboard() {
             Network health — last 24 hours
           </h2>
           <span className="text-xs text-tx3">
-            <span className="mr-3 inline-flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-accent" /> avg RTT
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" /> uptime
-            </span>
+            avg latency across destinations
           </span>
         </div>
         {chartData.length === 0 ? (
           <p className="text-sm text-tx3">
-            Not enough data yet — run a trace or wait for the hourly schedule.
+            Not enough data yet — run a trace or wait for the schedule.
           </p>
         ) : (
           <div className="h-64">

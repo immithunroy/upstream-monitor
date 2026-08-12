@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { Destination } from '../models/Destination';
 import { ChangeEvent } from '../models/ChangeEvent';
 import { TraceReport } from '../models/TraceReport';
+import { PingSample } from '../models/PingSample';
 import { isTracingRunning } from '../services/orchestrator';
 
 const router = Router();
@@ -41,6 +42,21 @@ router.get('/', async (_req, res) => {
     .sort({ startedAt: -1 })
     .lean();
 
+  // Ping-based network health: average latency of the most recent sample per destination.
+  const latestPings = await PingSample.aggregate([
+    { $sort: { sampledAt: -1 } },
+    { $group: { _id: '$destinationId', doc: { $first: '$$ROOT' } } },
+    { $replaceRoot: { newRoot: '$doc' } },
+  ]);
+  const pingAvgs = latestPings
+    .map((p) => p.avgRtt)
+    .filter((v): v is number => v !== null && Number.isFinite(v));
+  const networkLatencyMs = pingAvgs.length
+    ? Math.round((pingAvgs.reduce((a, b) => a + b, 0) / pingAvgs.length) * 10) / 10
+    : null;
+  const pingReachable = latestPings.filter((p) => p.success).length;
+  const pingUnreachable = latestPings.length - pingReachable;
+
   res.json({
     destinations: destCount,
     enabledDestinations: enabledCount,
@@ -52,6 +68,11 @@ router.get('/', async (_req, res) => {
     recovery: {
       reachable,
       unreachable,
+    },
+    networkLatencyMs,
+    pingRecovery: {
+      reachable: pingReachable,
+      unreachable: pingUnreachable,
     },
     uptime24h: samples24 ? Math.round((reachable24 / samples24) * 1000) / 10 : null,
     avgRtt24h: avgRtt24,

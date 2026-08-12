@@ -53,16 +53,22 @@ export default function Changes() {
     await loadEvents();
   }
 
+  async function ackAll() {
+    const res = await api.acknowledgeAllChanges(destinationId || undefined);
+    if (res.acknowledged > 0) await loadEvents();
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-tx">Detected Changes</h1>
           <p className="text-sm text-tx3">
-            Differences logged between consecutive hourly reports per destination
+            Differences logged between consecutive trace reports per destination
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button className="btn-primary" onClick={ackAll}>Acknowledge all</button>
           <select
             className="input w-56"
             value={destinationId}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import type { Destination, DestinationCategory } from '../lib/types';
 import Badge from '../components/Badge';
@@ -15,6 +16,8 @@ const emptyForm = {
 };
 
 export default function Destinations() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editParam = searchParams.get('edit');
   const [dests, setDests] = useState<Destination[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -38,6 +41,26 @@ export default function Destinations() {
   useEffect(() => {
     load();
   }, []);
+
+  // Open the edit modal directly when navigating here with ?edit=<id>.
+  useEffect(() => {
+    if (editParam) {
+      const d = dests.find((x) => x._id === editParam);
+      if (d) {
+        setForm({
+          name: d.name,
+          host: d.host,
+          category: d.category,
+          location: d.location,
+          region: d.region,
+          description: d.description,
+        });
+        setEditingId(d._id);
+        setShowForm(true);
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [editParam, dests, setSearchParams]);
 
   async function enrich() {
     setEnriching(true);

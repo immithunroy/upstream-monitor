@@ -2,7 +2,8 @@
 
 A network monitoring platform that:
 
-- **Traces** major global internet services, datacenters, and Internet Exchange Points (IXPs) every hour, and **logs the details of any change** it detects for the same destination between consecutive reports.
+- **Traces** major global internet services, datacenters, and Internet Exchange Points (IXPs) every 6 hours, and **logs the details of any change** it detects for the same destination between consecutive reports.
+- **Samples latency** with a 10-packet ping **every 5 minutes** per destination, graphing min / max / avg on each destination page.
 - **Attributes** every destination with its **AS number, company name, and registry data** from the Regional Internet Registries (ARIN / RIPE / APNIC / LACNIC / AFRINIC), resolved live from the target's IP.
 - Ships with a **global search**, **light/dark themes**, **period availability & latency reports** (daily … yearly), and a per-destination **history page**.
 - **Admin panel** (password protected) to add, edit, enable/disable and remove destinations.
@@ -11,8 +12,9 @@ Built with the **MERN stack** (MongoDB `4.4-focal`, Express, React, Node.js) and
 
 ## How it works
 
-1. A scheduler (default cron `0 * * * *`, i.e. once every hour) runs a **ping + traceroute** against every enabled destination.
-2. Each run produces a **TraceReport** (packet loss, RTT stats, hop-by-hop path, path fingerprint).
+1. A scheduler (default cron `0 */6 * * *`, i.e. once every 6 hours) runs a **ping + traceroute** against every enabled destination.
+2. A separate 5-minute ping loop (default cron `*/5 * * * *`) records a **PingSample** (10 packets → min / max / avg latency + loss) per destination for the latency graphs.
+3. Each trace run produces a **TraceReport** (packet loss, RTT stats, hop-by-hop path, path fingerprint).
 3. The **comparator** diffs each new report against the previous report *for the same destination* and detects changes such as:
 
 | Detected change | Example |
@@ -156,7 +158,7 @@ firewall is defense-in-depth against accidental re-exposure.
 
 ### First run
 
-On startup the backend seeds the destination list, starts RIR enrichment in the background, and starts the hourly scheduler. Run an initial full trace immediately from the UI (`Dashboard → Run full trace now`) or via the API. A second report is needed per destination before comparisons can produce change events.
+On startup the backend seeds the destination list, starts RIR enrichment in the background, and starts the trace (every 6h) and ping (every 5 min) schedulers. Run an initial full trace immediately from the UI (`Dashboard → Run full trace now`) or via the API. A second report is needed per destination before comparisons can produce change events.
 
 ## Local development (without Docker)
 
@@ -180,8 +182,9 @@ See `.env.example`. Key variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `TRACE_CRON` | `0 * * * *` | hourly traceroute schedule (cron) |
-| `PING_COUNT` | `4` | packets per ping probe |
+| `TRACE_CRON` | `0 */6 * * *` | traceroute schedule (cron, default every 6h) |
+| `PING_COUNT` | `10` | packets per ping probe |
+| `PING_INTERVAL_MINUTES` | `5` | ping sample interval (latency graphs) |
 | `PING_TIMEOUT_MS` | `2500` | per-packet ping timeout |
 | `TRACEROUTE_MAX_HOPS` | `30` | max hops traced |
 | `TRACEROUTE_TIMEOUT_SECONDS` | `4` | per-probe traceroute timeout |

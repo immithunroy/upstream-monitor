@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import { Destination } from '../models/Destination';
+import { TraceReport } from '../models/TraceReport';
+import { ChangeEvent } from '../models/ChangeEvent';
+import { PingSample } from '../models/PingSample';
 import { requireAdmin } from '../middleware/auth';
 import { enrichAllDestinations, enrichDestinationHost } from '../services/enrich';
 
@@ -97,6 +100,30 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     return;
   }
   res.json({ ok: true });
+});
+
+/** Deletes every report, change event and ping sample for a destination
+ *  without removing the destination itself. */
+router.delete('/:id/data', requireAdmin, async (req, res) => {
+  const dest = await Destination.findById(req.params.id).lean();
+  if (!dest) {
+    res.status(404).json({ error: 'Destination not found' });
+    return;
+  }
+  const id = dest._id as unknown as string;
+  const [reports, changes, pings] = await Promise.all([
+    TraceReport.deleteMany({ destinationId: id }),
+    ChangeEvent.deleteMany({ destinationId: id }),
+    PingSample.deleteMany({ destinationId: id }),
+  ]);
+  res.json({
+    ok: true,
+    deleted: {
+      reports: reports.deletedCount,
+      changes: changes.deletedCount,
+      pings: pings.deletedCount,
+    },
+  });
 });
 
 export default router;

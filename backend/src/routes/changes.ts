@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { ChangeEvent } from '../models/ChangeEvent';
+import { requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
@@ -27,7 +28,15 @@ router.get('/', async (req, res) => {
   res.json({ total, page: pageNum, limit: limitNum, data: docs });
 });
 
-router.post('/:id/acknowledge', async (req, res) => {
+router.post('/acknowledge-all', requireAdmin, async (req, res) => {
+  const { destinationId } = req.body || {};
+  const filter: Record<string, unknown> = { acknowledged: false };
+  if (destinationId) filter.destinationId = destinationId;
+  const result = await ChangeEvent.updateMany(filter, { $set: { acknowledged: true } });
+  res.json({ acknowledged: result.modifiedCount });
+});
+
+router.post('/:id/acknowledge', requireAdmin, async (req, res) => {
   const event = await ChangeEvent.findByIdAndUpdate(
     req.params.id,
     { acknowledged: true },
