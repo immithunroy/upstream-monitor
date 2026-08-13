@@ -8,26 +8,26 @@ datasource db {
 }
 
 model Destination {
-  id          String   @id @default(cuid())
-  name        String
-  host        String   @unique
-  category    String   @default("service")
-  location    String   @default("")
-  region      String   @default("")
-  description String   @default("")
-  enabled     Boolean  @default(true)
-  createdBy   String   @default("seed")
+  id          String   @id @default(cuid()) @map("id")
+  name        String   @map("name")
+  host        String   @unique @map("host")
+  category    String   @default("service") @map("category")
+  location    String   @default("") @map("location")
+  region      String   @default("") @map("region")
+  description String   @default("") @map("description")
+  enabled     Boolean  @default(true) @map("enabled")
+  createdBy   String   @default("seed") @map("created_by")
 
-  ipAddress String   @default("")
-  asn       Int?
-  company   String   @default("")
-  registry  String   @default("")
-  country   String   @default("")
-  prefix    String   @default("")
-  enrichedAt DateTime?
+  ipAddress String   @default("") @map("ip_address")
+  asn       Int?     @map("asn")
+  company   String   @default("") @map("company")
+  registry  String   @default("") @map("registry")
+  country   String   @default("") @map("country")
+  prefix    String   @default("") @map("prefix")
+  enrichedAt DateTime? @map("enriched_at")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   traceReports TraceReport[]
   changeEvents ChangeEvent[]
@@ -37,34 +37,35 @@ model Destination {
   @@index([enabled])
   @@index([asn])
   @@index([company])
+  @@map("destinations")
 }
 
 model TraceReport {
-  id            String   @id @default(cuid())
-  destinationId String
-  destHost      String
-  destName      String   @default("")
-  asn           Int?
-  company       String   @default("")
-  triggeredBy   String   @default("scheduler")
-  startedAt     DateTime @default(now())
-  completedAt   DateTime?
-  durationMs    Int      @default(0)
-  reachable     Boolean  @default(false)
+  id            String   @id @default(cuid()) @map("id")
+  destinationId String   @map("destination_id")
+  destHost      String   @map("dest_host")
+  destName      String   @default("") @map("dest_name")
+  asn           Int?     @map("asn")
+  company       String   @default("") @map("company")
+  triggeredBy   String   @default("scheduler") @map("triggered_by")
+  startedAt     DateTime @default(now()) @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+  durationMs    Int      @default(0) @map("duration_ms")
+  reachable     Boolean  @default(false) @map("reachable")
 
-  pingSuccess         Boolean @default(false)
-  pingPacketsSent     Int     @default(0)
-  pingPacketsReceived Int     @default(0)
-  pingLossPercent     Float   @default(100)
-  pingMinRtt          Float?
-  pingMaxRtt          Float?
-  pingAvgRtt          Float?
+  pingSuccess         Boolean @default(false) @map("ping_success")
+  pingPacketsSent     Int     @default(0) @map("ping_packets_sent")
+  pingPacketsReceived Int     @default(0) @map("ping_packets_received")
+  pingLossPercent     Float   @default(100) @map("ping_loss_percent")
+  pingMinRtt          Float?  @map("ping_min_rtt")
+  pingMaxRtt          Float?  @map("ping_max_rtt")
+  pingAvgRtt          Float?  @map("ping_avg_rtt")
 
-  pathFingerprint String @default("")
-  error           String @default("")
+  pathFingerprint String @default("") @map("path_fingerprint")
+  error           String @default("") @map("error")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
   hops        TraceHop[]
@@ -72,38 +73,40 @@ model TraceReport {
   @@index([destinationId, startedAt(sort: Desc)])
   @@index([startedAt(sort: Desc)])
   @@index([reachable])
+  @@map("trace_reports")
 }
 
 model TraceHop {
-  id       String  @id @default(cuid())
-  reportId String
-  ttl      Int
-  ip       String?
-  host     String?
-  status   String  @default("unreachable")
-  rtts     Json    @default("[]")
-  avgRtt   Float?
-  asn      Int?
-  company  String  @default("")
+  id       String  @id @default(cuid()) @map("id")
+  reportId String  @map("report_id")
+  ttl      Int     @map("ttl")
+  ip       String? @map("ip")
+  host     String? @map("host")
+  status   String  @default("unreachable") @map("status")
+  rtts     Json    @default("[]") @map("rtts")
+  avgRtt   Float?  @map("avg_rtt")
+  asn      Int?    @map("asn")
+  company  String  @default("") @map("company")
 
   report TraceReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([reportId, ttl])
+  @@map("trace_hops")
 }
 
 model ChangeEvent {
-  id            String   @id @default(cuid())
-  destinationId String
-  destHost      String
-  destName      String   @default("")
-  severity      String   @default("info")
-  summary       String
-  previousReportId String?
-  currentReportId  String?
-  acknowledged  Boolean  @default(false)
+  id            String   @id @default(cuid()) @map("id")
+  destinationId String   @map("destination_id")
+  destHost      String   @map("dest_host")
+  destName      String   @default("") @map("dest_name")
+  severity      String   @default("info") @map("severity")
+  summary       String   @map("summary")
+  previousReportId String? @map("previous_report_id")
+  currentReportId  String? @map("current_report_id")
+  acknowledged  Boolean  @default(false) @map("acknowledged")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
   changes     ChangeDetail[]
@@ -111,42 +114,45 @@ model ChangeEvent {
   @@index([destinationId, createdAt(sort: Desc)])
   @@index([severity])
   @@index([createdAt(sort: Desc)])
+  @@map("change_events")
 }
 
 model ChangeDetail {
-  id      String @id @default(cuid())
-  eventId String
-  type    String
-  field   String @default("")
-  hopTtl  Int?
-  oldValue Json?
-  newValue Json?
-  message String
+  id      String @id @default(cuid()) @map("id")
+  eventId String @map("event_id")
+  type    String @map("type")
+  field   String @default("") @map("field")
+  hopTtl  Int?   @map("hop_ttl")
+  oldValue Json? @map("old_value")
+  newValue Json? @map("new_value")
+  message String @map("message")
 
   event ChangeEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
+  @@map("change_details")
 }
 
 model PingSample {
-  id             String   @id @default(cuid())
-  destinationId  String
-  destHost       String
-  destName       String   @default("")
-  success        Boolean  @default(false)
-  minRtt         Float?
-  maxRtt         Float?
-  avgRtt         Float?
-  lossPercent    Float    @default(100)
-  packetsSent    Int      @default(0)
-  packetsReceived Int     @default(0)
-  sampledAt      DateTime @default(now())
+  id             String   @id @default(cuid()) @map("id")
+  destinationId  String   @map("destination_id")
+  destHost       String   @map("dest_host")
+  destName       String   @default("") @map("dest_name")
+  success        Boolean  @default(false) @map("success")
+  minRtt         Float?   @map("min_rtt")
+  maxRtt         Float?   @map("max_rtt")
+  avgRtt         Float?   @map("avg_rtt")
+  lossPercent    Float    @default(100) @map("loss_percent")
+  packetsSent    Int      @default(0) @map("packets_sent")
+  packetsReceived Int     @default(0) @map("packets_received")
+  sampledAt      DateTime @default(now()) @map("sampled_at")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
 
   @@index([destinationId, sampledAt(sort: Desc)])
   @@index([sampledAt(sort: Desc)])
+  @@map("ping_samples")
 }

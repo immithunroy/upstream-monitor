@@ -161,7 +161,13 @@ async function main(): Promise<void> {
   // --- Trace reports (with hops) ---
   const reports = (await reportColl.find({}).toArray()) as unknown as MongoTraceReport[];
   console.log(`[migrate] trace reports: ${reports.length}`);
+  const destIdSet = new Set(dests.map((d) => String(d._id)));
+  let reportsSkipped = 0;
   for (const r of reports) {
+    if (!destIdSet.has(String(r.destinationId))) {
+      reportsSkipped += 1;
+      continue;
+    }
     await prisma.traceReport.create({
       data: {
         id: r._id,
@@ -201,11 +207,17 @@ async function main(): Promise<void> {
       },
     });
   }
+  if (reportsSkipped > 0) console.log(`[migrate] trace reports skipped (orphan destination): ${reportsSkipped}`);
 
   // --- Change events (with details) ---
   const changes = (await changeColl.find({}).toArray()) as unknown as MongoChangeEvent[];
   console.log(`[migrate] change events: ${changes.length}`);
+  let changesSkipped = 0;
   for (const c of changes) {
+    if (!destIdSet.has(String(c.destinationId))) {
+      changesSkipped += 1;
+      continue;
+    }
     await prisma.changeEvent.create({
       data: {
         id: c._id,
@@ -232,11 +244,18 @@ async function main(): Promise<void> {
       },
     });
   }
+  if (changesSkipped > 0) console.log(`[migrate] change events skipped (orphan destination): ${changesSkipped}`);
 
   // --- Ping samples ---
   const pings = (await pingColl.find({}).toArray()) as unknown as MongoPingSample[];
   console.log(`[migrate] ping samples: ${pings.length}`);
+  let pingsSkipped = 0;
   for (const p of pings) {
+    // Skip samples whose destination no longer exists (orphaned rows).
+    if (!destIdSet.has(String(p.destinationId))) {
+      pingsSkipped += 1;
+      continue;
+    }
     await prisma.pingSample.create({
       data: {
         id: p._id,
@@ -256,6 +275,7 @@ async function main(): Promise<void> {
       },
     });
   }
+  if (pingsSkipped > 0) console.log(`[migrate] ping samples skipped (orphan destination): ${pingsSkipped}`);
 
   console.log('[migrate] DONE');
   await prisma.$disconnect();

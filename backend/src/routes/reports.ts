@@ -49,7 +49,16 @@ router.get('/', async (req, res) => {
 /** Latest trace report per destination (DISTINCT ON destination_id). */
 router.get('/latest', async (_req, res) => {
   const rows = await prisma.$queryRawUnsafe(
-    `SELECT DISTINCT ON (destination_id) * FROM trace_reports ORDER BY destination_id, started_at DESC`
+    `SELECT DISTINCT ON (destination_id)
+            id, destination_id AS "destinationId", dest_host AS "destHost", dest_name AS "destName",
+            asn, company, triggered_by AS "triggeredBy", started_at AS "startedAt",
+            completed_at AS "completedAt", duration_ms AS "durationMs", reachable,
+            ping_success AS "pingSuccess", ping_packets_sent AS "pingPacketsSent",
+            ping_packets_received AS "pingPacketsReceived", ping_loss_percent AS "pingLossPercent",
+            ping_min_rtt AS "pingMinRtt", ping_max_rtt AS "pingMaxRtt", ping_avg_rtt AS "pingAvgRtt",
+            path_fingerprint AS "pathFingerprint", error, created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM trace_reports
+   ORDER BY destination_id, started_at DESC`
   ) as unknown as Array<Record<string, unknown>>;
 
   const dests = await prisma.destination.findMany({ select: { id: true } });
