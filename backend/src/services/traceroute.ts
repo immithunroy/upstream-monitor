@@ -162,12 +162,15 @@ export async function runTraceroute(host: string): Promise<TraceHop[]> {
   const args = isWindows
     ? ['-d', '-h', String(env.traceMaxHops), '-w', String(env.traceTimeoutSeconds), host]
     : [
+        // ICMP echo mode (-I): the destination answers ICMP (ping works) but may
+        // silently drop UDP traceroute probes, which would hide the final hop.
+        '-I',
         '-m',
         String(env.traceMaxHops),
         '-w',
         String(env.traceTimeoutSeconds),
         '-q',
-        '1',
+        '2',
         '-n',
         host,
       ];
