@@ -28,6 +28,8 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<string>('time');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sumSortKey, setSumSortKey] = useState<string>('uptime');
+  const [sumSortDir, setSumSortDir] = useState<'asc' | 'desc'>('desc');
   const limit = 25;
 
   function toggleSort(key: string) {
@@ -38,6 +40,41 @@ export default function Reports() {
       setSortDir('asc');
     }
   }
+
+  function toggleSumSort(key: string) {
+    if (sumSortKey === key) {
+      setSumSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSumSortKey(key);
+      setSumSortDir('desc');
+    }
+  }
+
+  const sortedSummary = useMemo(() => {
+    const arr = [...(report?.destinations ?? [])];
+    arr.sort((a, b) => {
+      let cmp = 0;
+      switch (sumSortKey) {
+        case 'name':
+          cmp = a.name.localeCompare(b.name, undefined, { numeric: true });
+          break;
+        case 'asn':
+          cmp = (a.asn ?? -1) - (b.asn ?? -1);
+          break;
+        case 'uptime':
+          cmp = (a.uptimePct ?? 0) - (b.uptimePct ?? 0);
+          break;
+        case 'avgRtt':
+          cmp = (a.avgRtt ?? -1) - (b.avgRtt ?? -1);
+          break;
+        case 'reports':
+          cmp = (a.reports ?? 0) - (b.reports ?? 0);
+          break;
+      }
+      return sumSortDir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [report, sumSortKey, sumSortDir]);
 
   const sortedReports = useMemo(() => {
     const arr = [...reports];
@@ -248,19 +285,41 @@ export default function Reports() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-edge">
-                      <th className="th">Destination</th>
-                      <th className="th">ASN / Company</th>
-                      <th className="th">Uptime</th>
-                      <th className="th">Avg RTT</th>
-                      <th className="th">Reports</th>
+                      <th className="th">#</th>
+                      <th className="th">
+                        <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSumSort('name')}>
+                          Destination <SortIcon active={sumSortKey === 'name'} dir={sumSortDir} />
+                        </button>
+                      </th>
+                      <th className="th">
+                        <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSumSort('asn')}>
+                          ASN / Company <SortIcon active={sumSortKey === 'asn'} dir={sumSortDir} />
+                        </button>
+                      </th>
+                      <th className="th">
+                        <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSumSort('uptime')}>
+                          Uptime <SortIcon active={sumSortKey === 'uptime'} dir={sumSortDir} />
+                        </button>
+                      </th>
+                      <th className="th">
+                        <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSumSort('avgRtt')}>
+                          Avg RTT <SortIcon active={sumSortKey === 'avgRtt'} dir={sumSortDir} />
+                        </button>
+                      </th>
+                      <th className="th">
+                        <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSumSort('reports')}>
+                          Reports <SortIcon active={sumSortKey === 'reports'} dir={sumSortDir} />
+                        </button>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {report.destinations.length === 0 && (
-                      <tr><td className="td" colSpan={5}>No destinations matched in this period.</td></tr>
+                    {sortedSummary.length === 0 && (
+                      <tr><td className="td" colSpan={6}>No destinations matched in this period.</td></tr>
                     )}
-                    {report.destinations.map((d) => (
+                    {sortedSummary.map((d, i) => (
                       <tr key={d.destinationId} className="border-b border-edge/50 hover:bg-edge/30">
+                        <td className="td font-mono text-xs text-tx3">{i + 1}</td>
                         <td className="td font-medium">
                           <Link to={`/destination/${d.destinationId}`} className="hover:text-accent">
                             {d.name}
