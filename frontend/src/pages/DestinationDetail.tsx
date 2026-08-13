@@ -4,13 +4,35 @@ import {
   Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { api } from '../lib/api';
-import type { ChangeEvent, Destination, PeriodReport, PingSample, ReportPeriod, TraceHop, TraceReport } from '../lib/types';
+import type { ChangeEvent, Destination, PeriodReport, PingSample, ReportCompare, ReportPeriod, TraceHop, TraceReport } from '../lib/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import { CATEGORY_LABEL, fmtAgo, fmtDate, fmtRtt, periodTick } from '../lib/format';
 import { isAuthed } from '../lib/auth';
 
 const PERIODS: ReportPeriod[] = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'yearly'];
+
+const HOP_CHANGE_LABEL: Record<string, string> = {
+  hop_added: 'New hop',
+  hop_removed: 'Hop gone',
+  hop_ip_change: 'IP changed',
+  hop_rtt: 'RTT shifted',
+  same: 'Same',
+  none: '—',
+};
+
+function hopTone(change: string): string {
+  switch (change) {
+    case 'hop_added':
+    case 'hop_removed':
+    case 'hop_ip_change':
+      return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
+    case 'hop_rtt':
+      return 'bg-sky-500/15 text-sky-700 dark:text-sky-300';
+    default:
+      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
+  }
+}
 
 export default function DestinationDetail() {
   const { id } = useParams<{ id: string }>();
@@ -21,7 +43,8 @@ export default function DestinationDetail() {
   const [pings, setPings] = useState<PingSample[]>([]);
   const [period, setPeriod] = useState<ReportPeriod>('daily');
   const [periodReport, setPeriodReport] = useState<PeriodReport | null>(null);
-  const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [compares, setCompares] = useState<Record<string, ReportCompare | null>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tracing, setTracing] = useState(false);
@@ -61,6 +84,30 @@ export default function DestinationDetail() {
       .then(setPeriodReport)
       .catch(() => setPeriodReport(null));
   }, [period, id]);
+
+  function toggleExpanded(reportId: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(reportId)) {
+        next.delete(reportId);
+      } else {
+        next.add(reportId);
+      }
+      return next;
+    });
+  }
+
+  // Load the hop-by-hop comparison for every expanded report (vs its previous report).
+  useEffect(() => {
+    reports.forEach((r) => {
+      if (!expandedIds.has(r._id)) return;
+      if (r._id in compares) return;
+      api
+        .compareReport(r._id)
+        .then((cmp) => setCompares((prev) => ({ ...prev, [r._id]: cmp })))
+        .catch(() => setCompares((prev) => ({ ...prev, [r._id]: null })));
+    });
+  }, [expandedIds, reports, compares]);
 
   async function traceNow() {
     if (!dest) return;
@@ -342,12 +389,14 @@ export default function DestinationDetail() {
           ) : (
             <div className="space-y-2">
               {reports.map((r) => {
-                const expanded = expandedReportId === r._id;
+                const expanded = expandedIds.has(r._id);
+                const compare = compares[r._id];
+                const changeCount = compare?.diff?.filter((d) => d.change !== 'same' && d.change !== 'none').length ?? 0;
                 return (
                   <div key={r._id} className="overflow-hidden rounded-lg border border-edge bg-ink/40">
                     <button
                       className="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-edge/30"
-                      onClick={() => setExpandedReportId(expanded ? null : r._id)}
+                      onClick={() => toggleExpanded(r._id)}
                     >
                       <div className="flex items-center gap-2">
                         <span className={`text-xs ${expanded ? 'rotate-90' : ''} transition-transform text-tx3`}>▶</span>
@@ -356,6 +405,11 @@ export default function DestinationDetail() {
                           <Badge label="reachable" tone="good" />
                         ) : (
                           <Badge label="unreachable" tone="critical" />
+                        )}
+                        {changeCount > 0 && (
+                          <span className="inline-flex items-center rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                            {changeCount} route change{changeCount > 1 ? 's' : ''}
+                          </span>
                         )}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-tx3">
@@ -382,31 +436,85 @@ export default function DestinationDetail() {
                           <thead>
                             <tr className="border-b border-edge">
                               <th className="th">TTL</th>
-                              <th className="th">IP</th>
+                              <th className="th">Change</th>
+                              <th className="th">Previous IP</th>
+                              <th className="th">Current IP</th>
                               <th className="th">ASN / Company</th>
-                              <th className="th">Avg RTT</th>
+                              <th className="th">Prev RTT</th>
+                              <th className="th">Curr RTT</th>
                             </tr>
                           </thead>
                           <tbody>
                             {r.hops.length === 0 ? (
                               <tr>
-                                <td className="td text-tx3" colSpan={4}>No hops captured (unreachable).</td>
+                                <td className="td text-tx3" colSpan={7}>No hops captured (unreachable).</td>
                               </tr>
+                            ) : compare?.diff?.length ? (
+                              compare.diff.map((d) => (
+                                <tr
+                                  key={d.ttl}
+                                  className={`border-b border-edge/40 ${
+                                    d.change === 'same' || d.change === 'none' ? '' : 'bg-amber-500/5'
+                                  }`}
+                                >
+                                  <td className="td font-mono">{d.ttl}</td>
+                                  <td className="td">
+                                    <span className={`inline-block rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold ${hopTone(d.change)}`}>
+                                      {HOP_CHANGE_LABEL[d.change] ?? d.change}
+                                    </span>
+                                  </td>
+                                  <td className={`td font-mono text-xs ${d.change === 'hop_added' ? 'text-tx3' : ''}`}>
+                                    {d.prevIp ?? '—'}
+                                    {d.prevIp && d.prevIp !== d.currIp && (
+                                      <div className="font-mono text-[10px] text-tx3">
+                                        {d.prevAsn ? `AS${d.prevAsn}` : ''} {d.prevCompany || ''}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className={`td font-mono text-xs ${d.change === 'hop_removed' ? 'text-tx3' : ''}`}>
+                                    {d.currIp ?? '—'}
+                                    <div className="font-mono text-[10px] text-tx3">
+                                      {d.currAsn ? `AS${d.currAsn}` : ''} {d.currCompany || ''}
+                                    </div>
+                                  </td>
+                                  <td className="td font-mono text-xs">
+                                    {d.change === 'hop_ip_change' ? (
+                                      <span className="text-amber-600 dark:text-amber-300">
+                                        {d.currAsn ? `AS${d.currAsn}` : '—'} · {d.currCompany || 'unknown'}
+                                      </span>
+                                    ) : d.currAsn ? (
+                                      <span>{`AS${d.currAsn}`} · {d.currCompany || '—'}</span>
+                                    ) : (
+                                      '—'
+                                    )}
+                                  </td>
+                                  <td className="td font-mono text-xs">{fmtRtt(d.prevRtt)}</td>
+                                  <td className="td font-mono">{fmtRtt(d.currRtt)}</td>
+                                </tr>
+                              ))
                             ) : (
                               r.hops.map((h: TraceHop) => (
                                 <tr key={h.ttl} className="border-b border-edge/40">
                                   <td className="td font-mono">{h.ttl}</td>
+                                  <td className="td">—</td>
+                                  <td className="td font-mono text-xs">—</td>
                                   <td className="td font-mono text-xs">{h.ip ?? '—'}</td>
                                   <td className="td font-mono text-xs">
                                     {h.asn ? `AS${h.asn}` : '—'}
                                     {h.company ? ` · ${h.company}` : ''}
                                   </td>
+                                  <td className="td font-mono text-xs">—</td>
                                   <td className="td font-mono">{fmtRtt(h.avgRtt)}</td>
                                 </tr>
                               ))
                             )}
                           </tbody>
                         </table>
+                        {compare && !compare.hasPrevious && (
+                          <p className="px-3 py-2 text-xs text-tx3">
+                            No previous report to compare against — run a second trace to see hop-by-hop changes.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

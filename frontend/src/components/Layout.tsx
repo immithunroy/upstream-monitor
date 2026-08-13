@@ -18,7 +18,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-edge bg-panel/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+        <div className="mx-auto flex w-[80%] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
           <NavLink to="/" className="flex items-center gap-2.5">
             <img src="/logo.png" alt="Upstream Monitor" className="h-8 w-8 rounded-lg object-contain" />
             <span className="text-sm font-semibold leading-tight tracking-tight text-tx">
@@ -87,7 +87,7 @@ export default function Layout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main className="mx-auto w-[80%] px-4 py-6">
         <Outlet />
       </main>
     </div>
