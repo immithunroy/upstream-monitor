@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Destination {
+  id          String   @id @default(cuid())
+  name        String
+  host        String   @unique
+  category    String   @default("service")
+  location    String   @default("")
+  region      String   @default("")
+  description String   @default("")
+  enabled     Boolean  @default(true)
+  createdBy   String   @default("seed")
+
+  ipAddress String   @default("")
+  asn       Int?
+  company   String   @default("")
+  registry  String   @default("")
+  country   String   @default("")
+  prefix    String   @default("")
+  enrichedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  traceReports TraceReport[]
+  changeEvents ChangeEvent[]
+  pingSamples  PingSample[]
+
+  @@index([category])
+  @@index([enabled])
+  @@index([asn])
+  @@index([company])
+}
+
+model TraceReport {
+  id            String   @id @default(cuid())
+  destinationId String
+  destHost      String
+  destName      String   @default("")
+  asn           Int?
+  company       String   @default("")
+  triggeredBy   String   @default("scheduler")
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+  durationMs    Int      @default(0)
+  reachable     Boolean  @default(false)
+
+  pingSuccess         Boolean @default(false)
+  pingPacketsSent     Int     @default(0)
+  pingPacketsReceived Int     @default(0)
+  pingLossPercent     Float   @default(100)
+  pingMinRtt          Float?
+  pingMaxRtt          Float?
+  pingAvgRtt          Float?
+
+  pathFingerprint String @default("")
+  error           String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  hops        TraceHop[]
+
+  @@index([destinationId, startedAt(sort: Desc)])
+  @@index([startedAt(sort: Desc)])
+  @@index([reachable])
+}
+
+model TraceHop {
+  id       String  @id @default(cuid())
+  reportId String
+  ttl      Int
+  ip       String?
+  host     String?
+  status   String  @default("unreachable")
+  rtts     Json    @default("[]")
+  avgRtt   Float?
+  asn      Int?
+  company  String  @default("")
+
+  report TraceReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, ttl])
+}
+
+model ChangeEvent {
+  id            String   @id @default(cuid())
+  destinationId String
+  destHost      String
+  destName      String   @default("")
+  severity      String   @default("info")
+  summary       String
+  previousReportId String?
+  currentReportId  String?
+  acknowledged  Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  changes     ChangeDetail[]
+
+  @@index([destinationId, createdAt(sort: Desc)])
+  @@index([severity])
+  @@index([createdAt(sort: Desc)])
+}
+
+model ChangeDetail {
+  id      String @id @default(cuid())
+  eventId String
+  type    String
+  field   String @default("")
+  hopTtl  Int?
+  oldValue Json?
+  newValue Json?
+  message String
+
+  event ChangeEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+model PingSample {
+  id             String   @id @default(cuid())
+  destinationId  String
+  destHost       String
+  destName       String   @default("")
+  success        Boolean  @default(false)
+  minRtt         Float?
+  maxRtt         Float?
+  avgRtt         Float?
+  lossPercent    Float    @default(100)
+  packetsSent    Int      @default(0)
+  packetsReceived Int     @default(0)
+  sampledAt      DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@index([destinationId, sampledAt(sort: Desc)])
+  @@index([sampledAt(sort: Desc)])
+}

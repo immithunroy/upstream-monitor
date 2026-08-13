@@ -1,18 +1,18 @@
 services:
-  mongodb:
-    image: mongo:4.4-focal
-    container_name: upstream-mongodb
+  postgres:
+    image: postgres:18-alpine
+    container_name: upstream-postgres
     restart: always
-    # NEVER expose Mongo to the public internet. Bound to loopback only;
-    # the backend reaches it over the internal docker network as `mongodb`.
+    # NEVER expose Postgres to the public internet. Bound to loopback only;
+    # the backend reaches it over the internal docker network as `postgres`.
     ports:
-      - '127.0.0.1:27017:27017'
+      - '127.0.0.1:5432:5432'
     volumes:
-      - mongodb_data:/data/db
+      - postgres_data:/var/lib/postgresql/data
     environment:
-      MONGO_INITDB_DATABASE: upstream_monitor
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change-me-mongo-password}
+      POSTGRES_DB: upstream_monitor
+      POSTGRES_USER: ${POSTGRES_USER:-upstream}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres-password}
 
   backend:
     build:
@@ -25,7 +25,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5020
-      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-change-me-mongo-password}@mongodb:27017/upstream_monitor?authSource=admin
+      DATABASE_URL: postgresql://${POSTGRES_USER:-upstream}:${POSTGRES_PASSWORD:-change-me-postgres-password}@postgres:5432/upstream_monitor?schema=public
       TRACE_CRON: 0 */6 * * *
       PING_COUNT: 10
       PING_TIMEOUT_MS: 2500
@@ -47,7 +47,7 @@ services:
       - NET_RAW
       - NET_ADMIN
     depends_on:
-      - mongodb
+      - postgres
 
   frontend:
     build:
@@ -61,4 +61,4 @@ services:
       - backend
 
 volumes:
-  mongodb_data:
+  postgres_data:

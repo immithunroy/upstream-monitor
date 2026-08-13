@@ -1,4 +1,4 @@
-import { Destination } from '../models/Destination';
+import prisma from '../config/prisma';
 
 export interface SeedTarget {
   name: string;
@@ -75,17 +75,17 @@ export const SEED_TARGETS: SeedTarget[] = [
 ];
 
 export async function seedDestinations(): Promise<number> {
-  const existing = await Destination.countDocuments();
+  const existing = await prisma.destination.count();
   if (existing > 0) return 0;
 
   let inserted = 0;
   for (const target of SEED_TARGETS) {
     try {
-      await Destination.create({ ...target, enabled: true, createdBy: 'seed' });
+      await prisma.destination.create({ data: { ...target, enabled: true, createdBy: 'seed' } });
       inserted += 1;
     } catch (err) {
       // Skip duplicate hosts (e.g. same host reused for different labels)
-      if ((err as { code?: number }).code !== 11000) {
+      if ((err as { code?: string }).code !== 'P2002') {
         console.error(`[seed] failed to insert ${target.name}:`, (err as Error).message);
       }
     }

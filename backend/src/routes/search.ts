@@ -1,7 +1,5 @@
 import { Router } from 'express';
-import { Destination } from '../models/Destination';
-import { ChangeEvent } from '../models/ChangeEvent';
-import { TraceReport } from '../models/TraceReport';
+import prisma from '../config/prisma';
 
 const router = Router();
 
@@ -12,25 +10,34 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(esc, 'i');
-
   const [dests, changes, reports] = await Promise.all([
-    Destination.find({ enabled: true }).select('_id name host asn company category location region').lean(),
-    ChangeEvent.find({
-      $or: [{ destHost: regex }, { destName: regex }, { summary: regex }, { 'changes.message': regex }],
-    })
-      .sort({ createdAt: -1 })
-      .limit(8)
-      .lean(),
-    TraceReport.find({ $or: [{ destHost: regex }, { destName: regex }] })
-      .sort({ startedAt: -1 })
-      .limit(8)
-      .lean(),
+    prisma.destination.findMany({ where: { enabled: true } }),
+    prisma.changeEvent.findMany({
+      where: {
+        OR: [
+          { destHost: { contains: q, mode: 'insensitive' } },
+          { destName: { contains: q, mode: 'insensitive' } },
+          { summary: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      include: { changes: true },
+    }),
+    prisma.traceReport.findMany({
+      where: {
+        OR: [
+          { destHost: { contains: q, mode: 'insensitive' } },
+          { destName: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { startedAt: 'desc' },
+      take: 8,
+    }),
   ]);
 
   const asnMatch = /^as(\d+)$/i.test(q) ? Number.parseInt(q.slice(2), 10) : null;
-  const hostMatch = new RegExp(esc.replace(/\./g, '\\.'), 'i');
+  const hostMatch = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\./g, '\\.'), 'i');
 
   const destResults = dests
     .filter((d) => {
@@ -45,34 +52,34 @@ router.get('/', async (req, res) => {
     .slice(0, 8)
     .map((d) => ({
       type: 'destination' as const,
-      id: String(d._id),
+      id: d.id,
       title: d.name,
       subtitle: [d.host, d.asn ? `AS${d.asn}` : null, d.company].filter(Boolean).join(' · '),
-      path: `/destination/${String(d._id)}`,
+      path: `/destination/${d.id}`,
     }));
 
   const changeResults = changes.map((c) => ({
     type: 'change' as const,
-    id: String(c._id),
+    id: c.id,
     title: `${c.destName || c.destHost} — ${c.summary}`,
     subtitle: `${c.severity} · ${c.changes.length} change(s)`,
-    path: `/changes?destination=${String(c.destinationId)}`,
+    path: `/changes?destination=${c.destinationId}`,
   }));
 
   const seen = new Set<string>();
   const reportResults = reports
     .filter((r) => {
-      const key = String(r.destinationId);
+      const key = r.destinationId;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     })
     .map((r) => ({
       type: 'report' as const,
-      id: String(r._id),
+      id: r.id,
       title: r.destName || r.destHost,
       subtitle: `${r.reachable ? 'reachable' : 'unreachable'} · latest report`,
-      path: `/reports?destination=${String(r.destinationId)}`,
+      path: `/reports?destination=${r.destinationId}`,
     }));
 
   res.json({ query: q, destinations: destResults, changes: changeResults, reports: reportResults });

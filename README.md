@@ -65,11 +65,11 @@ You can add, edit, enable/disable, or delete destinations from the UI or API at 
 
 ## Tech stack
 
-- **Backend:** Node.js, Express, TypeScript, Mongoose, node-cron
+- **Backend:** Node.js, Express, TypeScript, Prisma, node-cron
 - **Trace engine:** system `ping` / `traceroute` (Linux) and `ping` / `tracert` (Windows dev) via `child_process`
 - **RIR attribution:** team-cymru `whois.cymru.com` + RDAP (rdap.org bootstrap)
 - **Frontend:** React 18, Vite, TypeScript, TailwindCSS, React Router, Recharts
-- **Database:** MongoDB `mongo:4.4-focal`
+- **Database:** PostgreSQL `postgres:18-alpine`
 - **Deploy:** Docker Compose, Nginx (static hosting + `/api` reverse proxy)
 
 ## Project structure
@@ -78,11 +78,12 @@ You can add, edit, enable/disable, or delete destinations from the UI or API at 
 upstrean-monitor/
 ├── backend/
 │   ├── Dockerfile               # multi-stage build: node:20-slim + traceroute + iputils-ping
-│   ├── scripts/                 # dev tests (trace engine, comparator, RIR, full E2E)
+│   ├── prisma/                  # Prisma schema + migrations
+│   ├── scripts/                 # dev tests (trace engine, comparator, RIR, full E2E, mongo->pg migration)
 │   └── src/
-│       ├── config/              # env, mongo connection
+│       ├── config/              # env, prisma/postgres connection
 │       ├── middleware/          # admin auth (signed token)
-│       ├── models/              # Destination, TraceReport, ChangeEvent
+│       ├── lib/                 # API mappers (Prisma rows -> API shape)
 │       ├── routes/              # REST API (admin, destinations, reports, changes, search, ...)
 │       ├── services/
 │       │   ├── traceroute.ts    # ping + traceroute runner & parsers
@@ -118,17 +119,17 @@ cd upstrean-monitor
 
 # tune settings FIRST — never deploy with the defaults
 cp .env.example .env
-#  - set MONGO_ROOT_PASSWORD to a long random string
+#  - set POSTGRES_PASSWORD to a long random string
 #  - set ADMIN_PASSWORD, AUTH_TOKEN_SECRET
 
 docker compose up -d --build
 ```
 
-> **Security — read this.** MongoDB is bound to loopback (`127.0.0.1:27017`) only and
-> requires authentication (`MONGO_ROOT_USERNAME` / `MONGO_ROOT_PASSWORD`). The
-> backend reaches it over the internal Docker network. **Never** expose Mongo to
-> the public internet and **always** set a strong `MONGO_ROOT_PASSWORD` — an
-> unauthenticated, publicly-reachable Mongo instance is wiped and ransomed by
+> **Security — read this.** PostgreSQL is bound to loopback (`127.0.0.1:5432`) only and
+> requires authentication (`POSTGRES_USER` / `POSTGRES_PASSWORD`). The
+> backend reaches it over the internal Docker network. **Never** expose Postgres to
+> the public internet and **always** set a strong `POSTGRES_PASSWORD` — an
+> unauthenticated, publicly-reachable database is wiped and ransomed by
 > automated attacks within minutes. Keep the VM firewall enabled (see below).
 
 Services:
@@ -137,7 +138,7 @@ Services:
 | --- | --- |
 | Frontend UI | http://<vps-ip>:8010/ |
 | Backend API | http://<vps-ip>:5020/api |
-| MongoDB | 127.0.0.1:27017 (loopback, auth required) |
+| PostgreSQL | 127.0.0.1:5432 (loopback, auth required) |
 
 The backend container installs `traceroute` and `iputils-ping` and is granted `NET_RAW` / `NET_ADMIN` capabilities so ICMP ping and traceroute work inside Docker.
 
@@ -163,11 +164,12 @@ On startup the backend seeds the destination list, starts RIR enrichment in the 
 ## Local development (without Docker)
 
 ```bash
-# 1. MongoDB must be running locally (4.4+)
+# 1. PostgreSQL must be running locally (16+; the image in compose is 18-alpine)
 # 2. Backend
 cd backend
-cp .env.example .env       # point MONGODB_URI at your local mongo
+cp .env.example .env       # point DATABASE_URL at your local postgres
 npm install
+npx prisma migrate deploy  # apply schema
 npm run dev                # API on :5020
 
 # 3. Frontend (in a second terminal)
@@ -223,7 +225,7 @@ See `.env.example`. Key variables:
 - **Change the defaults before exposing publicly:** `ADMIN_PASSWORD`, `AUTH_TOKEN_SECRET` (see `.env.example` / docker-compose env).
 - The admin panel protects all write operations. Read endpoints (dashboard, reports, changes, search) are public; place Nginx behind a reverse proxy (e.g. Caddy/Traefik with auth) or firewall ports if the whole UI should be private.
 - For ICMP-based probes the VPS host must allow outbound ICMP; some cloud providers filter it, in which case traceroute still yields UDP-based path data.
-- Mongo `4.4-focal` is EOL for official updates — pin a maintained image if you prefer, but the stack is compatible with 4.4+.
+- PostgreSQL `postgres:18-alpine` is used; the schema lives in `backend/prisma` and is applied with `prisma migrate deploy`.
 
 ## Testing
 
@@ -233,8 +235,8 @@ npm run test:smoke --prefix backend       # trace engine (needs ping/traceroute)
 npm run test:rir --prefix backend         # RIR parsers + concurrency pool
 npm run test:traceroute --prefix backend  # linux traceroute parser regression
 
-# Full end-to-end test (spins up an in-memory MongoDB automatically)
-npm run test:e2e --prefix backend
+# Data migration helper (MongoDB -> PostgreSQL), run once before switching:
+npm run migrate:from-mongo --prefix backend
 ```
 
 ## License

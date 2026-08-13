@@ -1,18 +1,33 @@
-import { Destination, DestinationDoc } from '../models/Destination';
-import { ChangeEvent, ChangeEventDoc } from '../models/ChangeEvent';
-import { TraceReport, TraceReportDoc } from '../models/TraceReport';
+import prisma from '../config/prisma';
 import { compareReports } from './comparator';
 import { runTrace } from './traceroute';
 import { enrichHops, maybeEnrichDestination } from './enrich';
 
 export interface TraceRunResult {
-  report: TraceReportDoc;
-  changeEvent: ChangeEventDoc | null;
+  report: {
+    id: string;
+    destinationId: string;
+    destHost: string;
+    reachable: boolean;
+    hops: Array<{ ttl: number }>;
+  };
+  changeEvent: {
+    id: string | null;
+    changes: Array<{ type: string }>;
+  } | null;
+}
+
+export interface DestinationLike {
+  id: string;
+  host: string;
+  name: string;
+  asn?: number | null;
+  company?: string;
 }
 
 /** Runs ping+traceroute for a single destination, stores the report, and
  *  compares it against the previous report for the same destination. */
-export async function traceDestination(dest: DestinationDoc, triggeredBy: 'scheduler' | 'manual' = 'scheduler'): Promise<TraceRunResult> {
+export async function traceDestination(dest: DestinationLike, triggeredBy: 'scheduler' | 'manual' = 'scheduler'): Promise<TraceRunResult> {
   const startedAt = new Date();
   const startedMs = Date.now();
 
@@ -45,58 +60,125 @@ export async function traceDestination(dest: DestinationDoc, triggeredBy: 'sched
     console.error(`[trace] hop enrichment failed for ${dest.host}:`, (err as Error).message);
   }
 
-  const report = (await TraceReport.create({
-    destinationId: dest._id,
-    destHost: dest.host,
-    destName: dest.name,
-    asn: dest.asn ?? null,
-    company: dest.company ?? '',
-    triggeredBy,
-    startedAt,
-    completedAt: new Date(),
-    durationMs: Date.now() - startedMs,
-    reachable: outcome.reachable,
-    ping: outcome.ping,
-    hops,
-    pathFingerprint: outcome.pathFingerprint,
-  })) as unknown as TraceReportDoc;
+  const report = await prisma.traceReport.create({
+    data: {
+      destinationId: dest.id,
+      destHost: dest.host,
+      destName: dest.name,
+      asn: dest.asn ?? null,
+      company: dest.company ?? '',
+      triggeredBy,
+      startedAt,
+      completedAt: new Date(),
+      durationMs: Date.now() - startedMs,
+      reachable: outcome.reachable,
+      pingSuccess: outcome.ping.success,
+      pingPacketsSent: outcome.ping.packetsSent,
+      pingPacketsReceived: outcome.ping.packetsReceived,
+      pingLossPercent: outcome.ping.lossPercent,
+      pingMinRtt: outcome.ping.minRtt,
+      pingMaxRtt: outcome.ping.maxRtt,
+      pingAvgRtt: outcome.ping.avgRtt,
+      pathFingerprint: outcome.pathFingerprint,
+      hops: {
+        create: hops.map((h) => ({
+          ttl: h.ttl,
+          ip: h.ip,
+          host: h.host,
+          status: h.status,
+          rtts: h.rtts,
+          avgRtt: h.avgRtt,
+          asn: h.asn,
+          company: h.company,
+        })),
+      },
+    },
+    include: { hops: true },
+  });
 
   // Keep RIR attribution fresh in the background (skips when enriched recently).
-  void maybeEnrichDestination(dest._id as unknown as string, dest.host);
+  void maybeEnrichDestination(dest.id, dest.host);
 
   // Find the previous report (excluding this one) for the same destination.
-  const prev = await TraceReport.findOne({
-    destinationId: dest._id,
-    _id: { $ne: report._id },
-  })
-    .sort({ startedAt: -1 })
-    .lean();
+  const prev = await prisma.traceReport.findFirst({
+    where: { destinationId: dest.id, id: { not: report.id } },
+    orderBy: { startedAt: 'desc' },
+    include: { hops: true },
+  });
 
-  let changeEvent: ChangeEventDoc | null = null;
+  let changeEventId: string | null = null;
+  let changeCount = 0;
   if (prev) {
-    const comparison = compareReports(prev as unknown as TraceReportDoc, report as unknown as TraceReportDoc);
+    const prevDoc = {
+      _id: prev.id as never,
+      destinationId: prev.destinationId as never,
+      destHost: prev.destHost,
+      reachable: prev.reachable,
+      ping: {
+        lossPercent: prev.pingLossPercent,
+        avgRtt: prev.pingAvgRtt,
+      },
+      hops: prev.hops,
+      pathFingerprint: prev.pathFingerprint,
+    } as never;
+    const currDoc = {
+      _id: report.id as never,
+      destinationId: report.destinationId as never,
+      destHost: report.destHost,
+      reachable: report.reachable,
+      ping: {
+        lossPercent: report.pingLossPercent,
+        avgRtt: report.pingAvgRtt,
+      },
+      hops: report.hops,
+      pathFingerprint: report.pathFingerprint,
+    } as never;
+    const comparison = compareReports(prevDoc, currDoc);
     if (comparison.changes.length > 0) {
-      changeEvent = await ChangeEvent.create({
-        destinationId: dest._id,
-        destHost: dest.host,
-        destName: dest.name,
-        severity: comparison.severity,
-        summary: comparison.summary,
-        previousReportId: prev._id,
-        currentReportId: report._id,
-        changes: comparison.changes,
+      const event = await prisma.changeEvent.create({
+        data: {
+          destinationId: dest.id,
+          destHost: dest.host,
+          destName: dest.name,
+          severity: comparison.severity,
+          summary: comparison.summary,
+          previousReportId: prev.id,
+          currentReportId: report.id,
+          changes: {
+            create: comparison.changes.map((c) => ({
+              type: c.type,
+              field: c.field ?? '',
+              hopTtl: c.hopTtl ?? null,
+              oldValue: c.oldValue !== undefined && c.oldValue !== null ? (c.oldValue as object) : undefined,
+              newValue: c.newValue !== undefined && c.newValue !== null ? (c.newValue as object) : undefined,
+              message: c.message,
+            })),
+          },
+        },
+        include: { changes: true },
       });
+      changeEventId = event.id;
+      changeCount = (event as { changes?: Array<unknown> }).changes?.length ?? 0;
     }
   }
 
-  return { report, changeEvent };
+  return {
+    report: {
+      id: report.id,
+      destinationId: report.destinationId,
+      destHost: report.destHost,
+      reachable: report.reachable,
+      hops: report.hops,
+    },
+    changeEvent: changeEventId ? { id: changeEventId, changes: [] } : null,
+  };
 }
 
 /** Traces every enabled destination, sequentially, and returns per-destination results. */
 export async function traceAll(triggeredBy: 'scheduler' | 'manual' = 'scheduler'): Promise<TraceRunResult[]> {
-  const dests = await Destination.find({ enabled: true }).sort({ name: 1 }).lean();
+  const dests = await prisma.destination.findMany({ where: { enabled: true }, orderBy: { name: 'asc' } });
   const results: TraceRunResult[] = [];
-  for (const dest of dests as unknown as DestinationDoc[]) {
+  for (const dest of dests) {
     try {
       const r = await traceDestination(dest, triggeredBy);
       results.push(r);

@@ -19,7 +19,11 @@ function float(name: string, fallback: number): number {
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: int('PORT', 5020),
-  mongoUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/upstream_monitor',
+  databaseUrl:
+    process.env.DATABASE_URL ||
+    'postgresql://upstream:upstream@127.0.0.1:5432/upstream_monitor?schema=public',
+  /* Legacy Mongo connection, used only by the one-time data migration script. */
+  mongoUri: process.env.MONGODB_URI || '',
   corsOrigin: process.env.CORS_ORIGIN || '*',
   traceCron: process.env.TRACE_CRON || '0 */6 * * *',
   pingCount: int('PING_COUNT', 10),

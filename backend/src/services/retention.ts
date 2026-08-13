@@ -1,6 +1,4 @@
-import { TraceReport } from '../models/TraceReport';
-import { PingSample } from '../models/PingSample';
-import { ChangeEvent } from '../models/ChangeEvent';
+import prisma from '../config/prisma';
 import { env } from '../config/env';
 
 /**
@@ -11,15 +9,15 @@ export async function runRetention(): Promise<{ traceReports: number; pingSample
   const cutoff = new Date(Date.now() - env.retentionDays * 24 * 3600 * 1000);
 
   const [traceReports, pingSamples, changeEvents] = await Promise.all([
-    TraceReport.deleteMany({ startedAt: { $lt: cutoff } }),
-    PingSample.deleteMany({ sampledAt: { $lt: cutoff } }),
-    ChangeEvent.deleteMany({ createdAt: { $lt: cutoff } }),
+    prisma.traceReport.deleteMany({ where: { startedAt: { lt: cutoff } } }),
+    prisma.pingSample.deleteMany({ where: { sampledAt: { lt: cutoff } } }),
+    prisma.changeEvent.deleteMany({ where: { createdAt: { lt: cutoff } } }),
   ]);
 
   const result = {
-    traceReports: traceReports.deletedCount,
-    pingSamples: pingSamples.deletedCount,
-    changeEvents: changeEvents.deletedCount,
+    traceReports: traceReports.count,
+    pingSamples: pingSamples.count,
+    changeEvents: changeEvents.count,
   };
   console.log(
     `[retention] purged data older than ${cutoff.toISOString()}: ` +

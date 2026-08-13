@@ -12,9 +12,15 @@
     "test:e2e": "tsx scripts/e2e.ts",
     "test:smoke": "tsx scripts/smoke.ts",
     "test:rir": "tsx scripts/test-rir.ts",
-    "test:traceroute": "tsx scripts/test-traceroute.ts"
+    "test:traceroute": "tsx scripts/test-traceroute.ts",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate-dev": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:seed": "prisma db seed",
+    "migrate:from-mongo": "tsx scripts/migrate-mongo-to-postgres.ts"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
@@ -26,6 +32,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^20.14.8",
     "@types/node-cron": "^3.0.11",
+    "prisma": "^6.19.3",
     "tsx": "^4.15.7",
     "typescript": "^5.4.5"
   },

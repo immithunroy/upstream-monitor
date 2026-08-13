@@ -1,21 +1,14 @@
-import mongoose from 'mongoose';
-import { env } from './env';
+import prisma from './prisma';
 
 export async function connectDb(): Promise<void> {
-  mongoose.connection.on('connected', () => {
-    // eslint-disable-next-line no-console
-    console.log(`[db] connected to ${mongoose.connection.name}`);
-  });
-  mongoose.connection.on('error', (err) => {
-    // eslint-disable-next-line no-console
-    console.error('[db] connection error:', err.message);
-  });
-
-  await mongoose.connect(env.mongoUri, {
-    serverSelectionTimeoutMS: 10000,
-  });
+  try {
+    await prisma.$connect();
+    console.log('[db] connected to PostgreSQL');
+  } catch (err) {
+    throw new Error(`PostgreSQL connection failed: ${(err as Error).message}`);
+  }
 }
 
 export async function disconnectDb(): Promise<void> {
-  await mongoose.disconnect();
+  await prisma.$disconnect();
 }

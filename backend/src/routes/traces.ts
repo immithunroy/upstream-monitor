@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAdmin } from '../middleware/auth';
-import { Destination } from '../models/Destination';
+import prisma from '../config/prisma';
 import { isTracingRunning, traceAll, traceDestination } from '../services/orchestrator';
 
 const router = Router();
@@ -9,17 +9,17 @@ router.post('/run', requireAdmin, async (req, res) => {
   const { destinationId } = req.body || {};
 
   if (destinationId) {
-    const dest = await Destination.findById(destinationId).lean();
+    const dest = await prisma.destination.findUnique({ where: { id: destinationId } });
     if (!dest) {
       res.status(404).json({ error: 'Destination not found' });
       return;
     }
     const result = await traceDestination(dest as never, 'manual');
     res.json({
-      reportId: result.report._id,
+      reportId: result.report.id,
       reachable: result.report.reachable,
       hopCount: result.report.hops.length,
-      changeEventId: result.changeEvent?._id ?? null,
+      changeEventId: result.changeEvent?.id ?? null,
       changeCount: result.changeEvent?.changes.length ?? 0,
     });
     return;
