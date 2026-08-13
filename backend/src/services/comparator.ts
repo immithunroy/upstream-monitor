@@ -55,8 +55,10 @@ export function buildHopDiff(prev: { hops: TraceHop[] }, curr: { hops: TraceHop[
     else if (p && c) {
       // AS-path change is the most vital signal (a company may run multiple
       // routers / peers for the same job) so it takes priority over an IP
-      // change. When the ASN differs, mark it as an AS change.
-      const asChanged = p.asn !== c.asn;
+      // change. Only flag it when the SAME hop's ASN changed vs the previous
+      // trace AND both ASNs are known — an intra-trace AS transition (packets
+      // hopping A->B->C at different TTLs) is normal and not a route change.
+      const asChanged = p.asn !== null && c.asn !== null && p.asn !== c.asn;
       if (asChanged) {
         row.change = 'hop_as_change';
       } else if (p.ip !== c.ip) {
@@ -185,8 +187,10 @@ export function compareReports(
     }
 
     // AS-path change is the most vital signal — a company may run multiple
-    // routers or peers for the same job, so trace ASN changes as well.
-    if (p.asn !== c.asn) {
+    // routers or peers for the same job. Only flag it when the SAME hop's ASN
+    // changed vs the previous trace AND both ASNs are known. Packets normally
+    // crossing from one AS to another across different hops is not a change.
+    if (p.asn !== null && c.asn !== null && p.asn !== c.asn) {
       changes.push({
         type: 'hop_as_change',
         hopTtl: ttl,

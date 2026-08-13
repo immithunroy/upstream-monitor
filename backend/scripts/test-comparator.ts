@@ -64,9 +64,9 @@ check(
   report({ hops: [{ ttl: 1, ip: '1.1.1.1', host: null, status: 'reachable', rtts: [10], avgRtt: 10 }], pathFingerprint: '1.1.1.1' })
 );
 
-// 6. AS path change (most vital -> critical)
+// 6. AS path change (most vital -> critical) — SAME hop AS changed vs previous
 check(
-  'AS path change',
+  'AS path change (same hop AS differs)',
   report({ hops: [
     { ttl: 1, ip: '1.1.1.1', host: null, status: 'reachable', rtts: [10], avgRtt: 10, asn: 15169, company: 'Google' },
     { ttl: 2, ip: '2.2.2.2', host: null, status: 'reachable', rtts: [20], avgRtt: 20, asn: 3356, company: 'Level3' },
@@ -74,5 +74,33 @@ check(
   report({ hops: [
     { ttl: 1, ip: '1.1.1.1', host: null, status: 'reachable', rtts: [10], avgRtt: 10, asn: 15169, company: 'Google' },
     { ttl: 2, ip: '3.3.3.3', host: null, status: 'reachable', rtts: [22], avgRtt: 22, asn: 2914, company: 'NTT' },
+  ] })
+);
+
+// 7. Intra-trace AS transition is NORMAL (packets hop AS A -> AS B at different
+//    TTLs) — must NOT be flagged as a route change.
+check(
+  'intra-trace AS transition (normal, not a change)',
+  report({ hops: [
+    { ttl: 1, ip: '1.1.1.1', host: null, status: 'reachable', rtts: [10], avgRtt: 10, asn: 15169, company: 'Google' },
+    { ttl: 2, ip: '2.2.2.2', host: null, status: 'reachable', rtts: [20], avgRtt: 20, asn: 3356, company: 'Level3' },
+  ] }),
+  report({ hops: [
+    { ttl: 1, ip: '1.1.1.1', host: null, status: 'reachable', rtts: [10], avgRtt: 10, asn: 15169, company: 'Google' },
+    { ttl: 2, ip: '2.2.2.2', host: null, status: 'reachable', rtts: [20], avgRtt: 20, asn: 3356, company: 'Level3' },
+  ] })
+);
+
+// 8. ASN known in one report but unknown (null) in the other — enrichment gap,
+//    not a real route change — must NOT be flagged critical.
+check(
+  'ASN null in one report (enrichment gap, not a change)',
+  report({ hops: [
+    { ttl: 1, ip: '1.1.1.1', host: null, status: 'reachable', rtts: [10], avgRtt: 10, asn: 15169, company: 'Google' },
+    { ttl: 2, ip: '2.2.2.2', host: null, status: 'reachable', rtts: [20], avgRtt: 20, asn: 3356, company: 'Level3' },
+  ] }),
+  report({ hops: [
+    { ttl: 1, ip: '1.1.1.1', host: null, status: 'reachable', rtts: [10], avgRtt: 10, asn: 15169, company: 'Google' },
+    { ttl: 2, ip: '3.3.3.3', host: null, status: 'reachable', rtts: [22], avgRtt: 22, asn: null, company: '' },
   ] })
 );
