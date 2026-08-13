@@ -349,8 +349,8 @@ export default function Reports() {
                   <tr className="border-b border-edge">
                     <th className="th">TTL</th>
                     <th className="th">Change</th>
-                    <th className="th">Previous IP</th>
                     <th className="th">Current IP</th>
+                    <th className="th">Previous IP</th>
                     <th className="th">AS Change</th>
                     <th className="th">Prev RTT</th>
                     <th className="th">Curr RTT</th>
@@ -375,11 +375,11 @@ export default function Reports() {
                             {HOP_CHANGE_LABEL[d.change] ?? d.change}
                           </span>
                         </td>
-                        <td className={`td font-mono text-xs ${d.change === 'hop_added' ? 'text-tx3' : ''}`}>
-                          {d.prevIp ?? '—'}
-                        </td>
                         <td className={`td font-mono text-xs ${d.change === 'hop_removed' ? 'text-tx3' : ''}`}>
                           {d.currIp ?? '—'}
+                        </td>
+                        <td className={`td font-mono text-xs ${d.change === 'hop_added' ? 'text-tx3' : ''}`}>
+                          {d.prevIp ?? '—'}
                         </td>
                         <td className={`td font-mono text-xs ${d.change === 'hop_as_change' ? 'font-semibold text-red-600 dark:text-red-300' : ''}`}>
                           {d.prevAsn ? `AS${d.prevAsn}` : '—'}
@@ -396,8 +396,8 @@ export default function Reports() {
                       <tr key={h.ttl} className="border-b border-edge/40">
                         <td className="td font-mono">{h.ttl}</td>
                         <td className="td">—</td>
-                        <td className="td font-mono text-xs">—</td>
                         <td className="td font-mono text-xs">{h.ip ?? '—'}</td>
+                        <td className="td font-mono text-xs">—</td>
                         <td className="td font-mono text-xs">
                           {h.asn ? `AS${h.asn}` : '—'}
                           {h.company ? ` · ${h.company}` : ''}
