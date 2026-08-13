@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -26,7 +26,51 @@ export default function Reports() {
   const [detail, setDetail] = useState<TraceReport | null>(null);
   const [compare, setCompare] = useState<ReportCompare | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sortKey, setSortKey] = useState<string>('time');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const limit = 25;
+
+  function toggleSort(key: string) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  const sortedReports = useMemo(() => {
+    const arr = [...reports];
+    arr.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'time':
+          cmp = new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime();
+          break;
+        case 'name':
+          cmp = (a.destName || a.destHost).localeCompare(b.destName || b.destHost, undefined, { numeric: true });
+          break;
+        case 'asn':
+          cmp = (a.asn ?? -1) - (b.asn ?? -1);
+          break;
+        case 'avgRtt':
+          cmp = (a.ping.avgRtt ?? -1) - (b.ping.avgRtt ?? -1);
+          break;
+        case 'loss':
+          cmp = (a.ping.lossPercent ?? 0) - (b.ping.lossPercent ?? 0);
+          break;
+        case 'hops':
+          cmp = (a.hops?.length ?? 0) - (b.hops?.length ?? 0);
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [reports, sortKey, sortDir]);
+
+  function SortIcon({ active, dir }: { active: boolean; dir: string }) {
+    return <span className={`ml-1 text-[10px] ${active ? 'text-accent' : 'text-tx3 opacity-40'}`}>{dir === 'asc' ? '▲' : '▼'}</span>;
+  }
 
   const loadDests = useCallback(async () => {
     setDests(await api.listDestinations());
@@ -250,22 +294,46 @@ export default function Reports() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-edge">
-                  <th className="th">Time</th>
-                  <th className="th">Destination</th>
-                  <th className="th">ASN</th>
+                  <th className="th">
+                    <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('time')}>
+                      Time <SortIcon active={sortKey === 'time'} dir={sortDir} />
+                    </button>
+                  </th>
+                  <th className="th">
+                    <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('name')}>
+                      Destination <SortIcon active={sortKey === 'name'} dir={sortDir} />
+                    </button>
+                  </th>
+                  <th className="th">
+                    <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('asn')}>
+                      ASN <SortIcon active={sortKey === 'asn'} dir={sortDir} />
+                    </button>
+                  </th>
                   <th className="th">Status</th>
-                  <th className="th">Avg RTT</th>
+                  <th className="th">
+                    <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('avgRtt')}>
+                      Avg RTT <SortIcon active={sortKey === 'avgRtt'} dir={sortDir} />
+                    </button>
+                  </th>
                   <th className="th">Min/Max</th>
-                  <th className="th">Loss</th>
-                  <th className="th">Hops</th>
+                  <th className="th">
+                    <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('loss')}>
+                      Loss <SortIcon active={sortKey === 'loss'} dir={sortDir} />
+                    </button>
+                  </th>
+                  <th className="th">
+                    <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('hops')}>
+                      Hops <SortIcon active={sortKey === 'hops'} dir={sortDir} />
+                    </button>
+                  </th>
                   <th className="th">Trigger</th>
                 </tr>
               </thead>
               <tbody>
-                {reports.length === 0 && (
+                {sortedReports.length === 0 && (
                   <tr><td className="td" colSpan={9}>No reports found.</td></tr>
                 )}
-                {reports.map((r) => (
+                {sortedReports.map((r) => (
                   <tr key={r._id} className="cursor-pointer border-b border-edge/50 hover:bg-edge/30" onClick={() => openDetail(r)}>
                     <td className="td font-mono text-xs">{fmtDate(r.startedAt)}</td>
                     <td className="td">

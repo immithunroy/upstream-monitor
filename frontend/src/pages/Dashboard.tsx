@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -12,12 +12,21 @@ import { fmtAgo, fmtRtt, periodTick } from '../lib/format';
 
 const PERIODS: ReportPeriod[] = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'yearly'];
 
+type SortKey = 'name' | 'asn' | 'avgRtt' | 'loss' | 'hops' | 'ran';
+type SortDir = 'asc' | 'desc';
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  return <span className={`ml-1 text-[10px] ${active ? 'text-accent' : 'text-tx3 opacity-40'}`}>{dir === 'asc' ? '▲' : '▼'}</span>;
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [latest, setLatest] = useState<TraceReport[]>([]);
   const [period, setPeriod] = useState<ReportPeriod>('daily');
   const [periodReport, setPeriodReport] = useState<PeriodReport | null>(null);
   const [error, setError] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   async function load() {
     try {
@@ -47,6 +56,44 @@ export default function Dashboard() {
   useEffect(() => {
     loadPeriod();
   }, [period]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'name' ? 'asc' : 'asc');
+    }
+  }
+
+  const sortedLatest = useMemo(() => {
+    const arr = [...latest];
+    arr.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'name':
+          cmp = (a.destName || a.destHost).localeCompare(b.destName || b.destHost, undefined, { numeric: true });
+          break;
+        case 'asn':
+          cmp = (a.asn ?? -1) - (b.asn ?? -1);
+          break;
+        case 'avgRtt':
+          cmp = (a.ping.avgRtt ?? -1) - (b.ping.avgRtt ?? -1);
+          break;
+        case 'loss':
+          cmp = (a.ping.lossPercent ?? 0) - (b.ping.lossPercent ?? 0);
+          break;
+        case 'hops':
+          cmp = (a.hops?.length ?? 0) - (b.hops?.length ?? 0);
+          break;
+        case 'ran':
+          cmp = new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime();
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [latest, sortKey, sortDir]);
 
   if (error && !stats) {
     return (
@@ -165,24 +212,48 @@ export default function Dashboard() {
             <thead>
               <tr className="border-b border-edge">
                 <th className="th">#</th>
-                <th className="th">Destination</th>
-                <th className="th">ASN / Company</th>
+                <th className="th">
+                  <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('name')}>
+                    Destination <SortIcon active={sortKey === 'name'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="th">
+                  <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('asn')}>
+                    ASN / Company <SortIcon active={sortKey === 'asn'} dir={sortDir} />
+                  </button>
+                </th>
                 <th className="th">Status</th>
-                <th className="th">Avg RTT</th>
-                <th className="th">Loss</th>
-                <th className="th">Hops</th>
-                <th className="th">Ran</th>
+                <th className="th">
+                  <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('avgRtt')}>
+                    Avg RTT <SortIcon active={sortKey === 'avgRtt'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="th">
+                  <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('loss')}>
+                    Loss <SortIcon active={sortKey === 'loss'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="th">
+                  <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('hops')}>
+                    Hops <SortIcon active={sortKey === 'hops'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="th">
+                  <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('ran')}>
+                    Ran <SortIcon active={sortKey === 'ran'} dir={sortDir} />
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {latest.length === 0 && (
+              {sortedLatest.length === 0 && (
                 <tr>
                   <td className="td" colSpan={8}>
                     No reports yet — run a trace or wait for the schedule.
                   </td>
                 </tr>
               )}
-              {latest.map((r, i) => (
+              {sortedLatest.map((r, i) => (
                 <tr key={r._id} className="border-b border-edge/50 hover:bg-edge/30">
                   <td className="td font-mono text-xs text-tx3">{i + 1}</td>
                   <td className="td font-medium">
