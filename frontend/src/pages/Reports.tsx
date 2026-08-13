@@ -294,6 +294,7 @@ export default function Reports() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-edge">
+                  <th className="th">#</th>
                   <th className="th">
                     <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('time')}>
                       Time <SortIcon active={sortKey === 'time'} dir={sortDir} />
@@ -331,10 +332,11 @@ export default function Reports() {
               </thead>
               <tbody>
                 {sortedReports.length === 0 && (
-                  <tr><td className="td" colSpan={9}>No reports found.</td></tr>
+                  <tr><td className="td" colSpan={10}>No reports found.</td></tr>
                 )}
-                {sortedReports.map((r) => (
+                {sortedReports.map((r, i) => (
                   <tr key={r._id} className="cursor-pointer border-b border-edge/50 hover:bg-edge/30" onClick={() => openDetail(r)}>
+                    <td className="td font-mono text-xs text-tx3">{(page - 1) * limit + i + 1}</td>
                     <td className="td font-mono text-xs">{fmtDate(r.startedAt)}</td>
                     <td className="td">
                       <span className="font-medium">{r.destName || r.destHost}</span>

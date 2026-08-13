@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -52,7 +52,45 @@ export default function DestinationDetail() {
   const [error, setError] = useState('');
   const [tracing, setTracing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sortKey, setSortKey] = useState<string>('time');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const authed = isAuthed();
+
+  function toggleSort(key: string) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  const sortedReports = useMemo(() => {
+    const arr = [...reports];
+    arr.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'time':
+          cmp = new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime();
+          break;
+        case 'avgRtt':
+          cmp = (a.ping.avgRtt ?? -1) - (b.ping.avgRtt ?? -1);
+          break;
+        case 'loss':
+          cmp = (a.ping.lossPercent ?? 0) - (b.ping.lossPercent ?? 0);
+          break;
+        case 'hops':
+          cmp = (a.hops?.length ?? 0) - (b.hops?.length ?? 0);
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [reports, sortKey, sortDir]);
+
+  function SortIcon({ active, dir }: { active: boolean; dir: string }) {
+    return <span className={`ml-1 text-[10px] ${active ? 'text-accent' : 'text-tx3 opacity-40'}`}>{dir === 'asc' ? '▲' : '▼'}</span>;
+  }
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -391,16 +429,35 @@ export default function DestinationDetail() {
             <p className="text-sm text-tx3">No trace reports yet.</p>
           ) : (
             <div className="space-y-2">
-              {reports.map((r) => {
+              <div className="flex items-center gap-3 rounded-lg border border-edge bg-ink/40 px-3 py-2 text-xs text-tx3">
+                <span className="w-6 font-mono">#</span>
+                <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('time')}>
+                  Time <SortIcon active={sortKey === 'time'} dir={sortDir} />
+                </button>
+                <span className="ml-2">Status</span>
+                <button className="ml-auto inline-flex items-center hover:text-tx" onClick={() => toggleSort('avgRtt')}>
+                  Avg RTT <SortIcon active={sortKey === 'avgRtt'} dir={sortDir} />
+                </button>
+                <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('loss')}>
+                  Loss <SortIcon active={sortKey === 'loss'} dir={sortDir} />
+                </button>
+                <button className="inline-flex items-center hover:text-tx" onClick={() => toggleSort('hops')}>
+                  Hops <SortIcon active={sortKey === 'hops'} dir={sortDir} />
+                </button>
+                <span className="w-16 text-right">Trigger</span>
+                <span className="w-14 text-right">Export</span>
+              </div>
+              {sortedReports.map((r, idx) => {
                 const expanded = expandedIds.has(r._id);
                 const compare = compares[r._id];
                 const changeCount = compare?.diff?.filter((d) => d.change !== 'same' && d.change !== 'none').length ?? 0;
                 return (
                   <div key={r._id} className="overflow-hidden rounded-lg border border-edge bg-ink/40">
                     <button
-                      className="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-edge/30"
+                      className="flex w-full flex-wrap items-center gap-3 px-3 py-2.5 text-left hover:bg-edge/30"
                       onClick={() => toggleExpanded(r._id)}
                     >
+                      <span className="w-6 font-mono text-xs text-tx3">{idx + 1}</span>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs ${expanded ? 'rotate-90' : ''} transition-transform text-tx3`}>▶</span>
                         <span className="text-xs font-medium text-tx">{fmtDate(r.startedAt)}</span>
@@ -415,7 +472,7 @@ export default function DestinationDetail() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-tx3">
+                      <div className="ml-auto flex items-center gap-3 text-xs text-tx3">
                         <span className="font-mono">avg {fmtRtt(r.ping.avgRtt)}</span>
                         <span>{r.ping.lossPercent}% loss</span>
                         <span>{r.hops.length} hops</span>
