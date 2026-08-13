@@ -84,7 +84,9 @@ router.get('/latest', async (_req, res) => {
 });
 
 /** Period availability / latency summary (daily, weekly, monthly, quarterly,
- *  half-yearly, yearly) computed from trace reports in the window. */
+ *  half-yearly, yearly). The per-destination table + overall stats come from
+ *  trace reports; the graph series is bucketed from high-frequency ping
+ *  samples (daily = hourly timeline, weekly/monthly = daily, longer = monthly). */
 router.get('/period', async (req, res) => {
   const { period = 'daily', destinationId } = req.query;
   const p = String(period);
@@ -120,7 +122,6 @@ router.get('/period', async (req, res) => {
 
   const destById = new Map(dests.map((d) => [d.id, d]));
   const perDest = new Map<string, { reports: number; reachable: number; rttSum: number; rttCount: number }>();
-  const series = new Map<string, { samples: number; reachable: number; rttSum: number; rttCount: number }>();
   let totalReports = 0;
   let totalReachable = 0;
   let rttSum = 0;
@@ -148,19 +149,6 @@ router.get('/period', async (req, res) => {
       bucket.rttSum += avg;
       bucket.rttCount += 1;
     }
-
-    const day = r.startedAt.toISOString().slice(0, 10);
-    let s = series.get(day);
-    if (!s) {
-      s = { samples: 0, reachable: 0, rttSum: 0, rttCount: 0 };
-      series.set(day, s);
-    }
-    s.samples += 1;
-    if (r.reachable) s.reachable += 1;
-    if (avg !== null && Number.isFinite(avg)) {
-      s.rttSum += avg;
-      s.rttCount += 1;
-    }
   }
 
   const destinations = Array.from(perDest.entries()).map(([id, b]) => {
@@ -177,6 +165,53 @@ router.get('/period', async (req, res) => {
       avgRtt: b.rttCount ? Math.round((b.rttSum / b.rttCount) * 10) / 10 : null,
     };
   }).sort((a, b) => b.uptimePct - a.uptimePct || (b.avgRtt ?? 0) - (a.avgRtt ?? 0));
+
+  // --- Graph series, bucketed from ping samples per period ---
+  const pingWhere: Record<string, unknown> = { sampledAt: { gte: from, lte: to } };
+  if (destinationId) pingWhere.destinationId = destinationId;
+  const samples = await prisma.pingSample.findMany({
+    where: pingWhere,
+    select: { sampledAt: true, success: true, avgRtt: true },
+  });
+
+  const bucketKey = (dt: Date): string => {
+    switch (p) {
+      case 'daily': {
+        const h = new Date(dt);
+        h.setMinutes(0, 0, 0);
+        return h.toISOString();
+      }
+      case 'weekly':
+      case 'monthly': {
+        const d = new Date(dt);
+        d.setHours(0, 0, 0, 0);
+        return d.toISOString();
+      }
+      default: {
+        const m = new Date(dt);
+        m.setDate(1);
+        m.setHours(0, 0, 0, 0);
+        return m.toISOString();
+      }
+    }
+  };
+
+  const series = new Map<string, { samples: number; success: number; rttSum: number; rttCount: number }>();
+  for (const s of samples) {
+    const key = bucketKey(s.sampledAt);
+    let b = series.get(key);
+    if (!b) {
+      b = { samples: 0, success: 0, rttSum: 0, rttCount: 0 };
+      series.set(key, b);
+    }
+    b.samples += 1;
+    if (s.success) b.success += 1;
+    const avg = s.avgRtt;
+    if (avg !== null && Number.isFinite(avg)) {
+      b.rttSum += avg;
+      b.rttCount += 1;
+    }
+  }
 
   res.json({
     period: p,
@@ -195,7 +230,7 @@ router.get('/period', async (req, res) => {
       .map(([day, s]) => ({
         day,
         samples: s.samples,
-        uptimePct: s.samples ? Math.round((s.reachable / s.samples) * 1000) / 10 : 0,
+        uptimePct: s.samples ? Math.round((s.success / s.samples) * 1000) / 10 : 0,
         avgRtt: s.rttCount ? Math.round((s.rttSum / s.rttCount) * 10) / 10 : null,
       })),
   });

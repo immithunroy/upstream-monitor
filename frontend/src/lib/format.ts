@@ -25,21 +25,21 @@ export const CATEGORY_LABEL: Record<string, string> = {
   cdn: 'CDN',
 };
 
-/** Period-aware x-axis label for the day-bucketed period series. */
-export function periodTick(period: string, day: string): string {
-  const d = new Date(`${day}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return day;
+/** Period-aware x-axis label for the bucket key returned by /reports/period.
+ *  The key is an ISO timestamp: daily -> hour, weekly/monthly -> date,
+ *  quarterly/half-yearly/yearly -> month. */
+export function periodTick(period: string, key: string): string {
+  const d = new Date(key);
+  if (Number.isNaN(d.getTime())) return key;
   switch (period) {
     case 'daily':
-      return d.toLocaleDateString([], { weekday: 'short' });
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     case 'weekly':
       return d.toLocaleDateString([], { weekday: 'short' });
     case 'monthly':
-      return d.toLocaleDateString([], { month: 'short' });
+      return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
     case 'quarterly':
-      return d.toLocaleDateString([], { month: 'short' });
     case 'half-yearly':
-      return d.toLocaleDateString([], { month: 'short' });
     case 'yearly':
       return d.toLocaleDateString([], { month: 'short' });
     default:
