@@ -178,7 +178,7 @@ export interface Paginated<T> {
   data: T[];
 }
 
-export type HopChange = 'same' | 'hop_added' | 'hop_removed' | 'hop_ip_change' | 'hop_rtt' | 'none';
+export type HopChange = 'same' | 'hop_added' | 'hop_removed' | 'hop_ip_change' | 'hop_as_change' | 'hop_rtt' | 'none';
 
 export interface HopDiff {
   ttl: number;

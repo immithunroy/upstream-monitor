@@ -63,3 +63,16 @@ check(
   report({}),
   report({ hops: [{ ttl: 1, ip: '1.1.1.1', host: null, status: 'reachable', rtts: [10], avgRtt: 10 }], pathFingerprint: '1.1.1.1' })
 );
+
+// 6. AS path change (most vital -> critical)
+check(
+  'AS path change',
+  report({ hops: [
+    { ttl: 1, ip: '1.1.1.1', host: null, status: 'reachable', rtts: [10], avgRtt: 10, asn: 15169, company: 'Google' },
+    { ttl: 2, ip: '2.2.2.2', host: null, status: 'reachable', rtts: [20], avgRtt: 20, asn: 3356, company: 'Level3' },
+  ] }),
+  report({ hops: [
+    { ttl: 1, ip: '1.1.1.1', host: null, status: 'reachable', rtts: [10], avgRtt: 10, asn: 15169, company: 'Google' },
+    { ttl: 2, ip: '3.3.3.3', host: null, status: 'reachable', rtts: [22], avgRtt: 22, asn: 2914, company: 'NTT' },
+  ] })
+);

@@ -79,6 +79,7 @@ export default function Reports() {
     hop_added: 'New hop',
     hop_removed: 'Hop gone',
     hop_ip_change: 'IP changed',
+    hop_as_change: 'AS changed',
     hop_rtt: 'RTT shifted',
     same: 'Same',
     none: '—',
@@ -86,6 +87,8 @@ export default function Reports() {
 
   function hopTone(change: string): string {
     switch (change) {
+      case 'hop_as_change':
+        return 'bg-red-500/15 text-red-700 dark:text-red-300';
       case 'hop_added':
       case 'hop_removed':
       case 'hop_ip_change':
@@ -348,7 +351,7 @@ export default function Reports() {
                     <th className="th">Change</th>
                     <th className="th">Previous IP</th>
                     <th className="th">Current IP</th>
-                    <th className="th">ASN / Company</th>
+                    <th className="th">AS Change</th>
                     <th className="th">Prev RTT</th>
                     <th className="th">Curr RTT</th>
                   </tr>
@@ -359,7 +362,11 @@ export default function Reports() {
                       <tr
                         key={d.ttl}
                         className={`border-b border-edge/40 ${
-                          d.change === 'same' ? '' : 'bg-amber-500/5'
+                          d.change === 'same' || d.change === 'none'
+                            ? ''
+                            : d.change === 'hop_as_change'
+                              ? 'bg-red-500/10'
+                              : 'bg-amber-500/5'
                         }`}
                       >
                         <td className="td font-mono">{d.ttl}</td>
@@ -370,28 +377,15 @@ export default function Reports() {
                         </td>
                         <td className={`td font-mono text-xs ${d.change === 'hop_added' ? 'text-tx3' : ''}`}>
                           {d.prevIp ?? '—'}
-                          {d.prevIp && d.prevIp !== d.currIp && (
-                            <div className="font-mono text-[10px] text-tx3">
-                              {d.prevAsn ? `AS${d.prevAsn}` : ''} {d.prevCompany || ''}
-                            </div>
-                          )}
                         </td>
                         <td className={`td font-mono text-xs ${d.change === 'hop_removed' ? 'text-tx3' : ''}`}>
                           {d.currIp ?? '—'}
-                          <div className="font-mono text-[10px] text-tx3">
-                            {d.currAsn ? `AS${d.currAsn}` : ''} {d.currCompany || ''}
-                          </div>
                         </td>
-                        <td className="td font-mono text-xs">
-                          {d.change === 'hop_ip_change' ? (
-                            <span className="text-amber-600 dark:text-amber-300">
-                              {d.currAsn ? `AS${d.currAsn}` : '—'} · {d.currCompany || 'unknown'}
-                            </span>
-                          ) : d.currAsn ? (
-                            <span>{`AS${d.currAsn}`} · {d.currCompany || '—'}</span>
-                          ) : (
-                            '—'
-                          )}
+                        <td className={`td font-mono text-xs ${d.change === 'hop_as_change' ? 'font-semibold text-red-600 dark:text-red-300' : ''}`}>
+                          {d.prevAsn ? `AS${d.prevAsn}` : '—'}
+                          <span className="text-tx3"> → </span>
+                          {d.currAsn ? `AS${d.currAsn}` : '—'}
+                          {d.currCompany ? <div className="font-mono text-[10px] text-tx3">{d.currCompany}</div> : null}
                         </td>
                         <td className="td font-mono text-xs">{fmtRtt(d.prevRtt)}</td>
                         <td className="td font-mono">{fmtRtt(d.currRtt)}</td>

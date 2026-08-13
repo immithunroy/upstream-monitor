@@ -11,7 +11,7 @@ export interface ComparisonResult {
 /** One row of a hop-by-hop "previous vs current" comparison. */
 export interface HopDiff {
   ttl: number;
-  change: 'same' | 'hop_added' | 'hop_removed' | 'hop_ip_change' | 'hop_rtt' | 'none';
+  change: 'same' | 'hop_added' | 'hop_removed' | 'hop_ip_change' | 'hop_as_change' | 'hop_rtt' | 'none';
   prevIp: string | null;
   currIp: string | null;
   prevRtt: number | null;
@@ -53,8 +53,15 @@ export function buildHopDiff(prev: { hops: TraceHop[] }, curr: { hops: TraceHop[
     if (!p && c) row.change = 'hop_added';
     else if (p && !c) row.change = 'hop_removed';
     else if (p && c) {
-      if (p.ip !== c.ip) row.change = 'hop_ip_change';
-      else {
+      // AS-path change is the most vital signal (a company may run multiple
+      // routers / peers for the same job) so it takes priority over an IP
+      // change. When the ASN differs, mark it as an AS change.
+      const asChanged = p.asn !== c.asn;
+      if (asChanged) {
+        row.change = 'hop_as_change';
+      } else if (p.ip !== c.ip) {
+        row.change = 'hop_ip_change';
+      } else {
         const pct = rttDeltaPct(p.avgRtt, c.avgRtt);
         const abs = Math.abs((c.avgRtt ?? 0) - (p.avgRtt ?? 0));
         if (pct !== null && pct >= env.rttChangePercentThreshold && abs >= env.rttChangeAbsThresholdMs) {
@@ -177,6 +184,18 @@ export function compareReports(
       continue;
     }
 
+    // AS-path change is the most vital signal — a company may run multiple
+    // routers or peers for the same job, so trace ASN changes as well.
+    if (p.asn !== c.asn) {
+      changes.push({
+        type: 'hop_as_change',
+        hopTtl: ttl,
+        oldValue: p.asn,
+        newValue: c.asn,
+        message: `AS path changed at TTL ${ttl}: ${p.asn ? `AS${p.asn}` : 'unknown'} (${p.company || 'n/a'}) -> ${c.asn ? `AS${c.asn}` : 'unknown'} (${c.company || 'n/a'})`,
+      });
+    }
+
     if (p.ip !== c.ip) {
       changes.push({
         type: 'hop_ip_change',
@@ -218,7 +237,9 @@ export function compareReports(
     (c, i) => changes.findIndex((x) => x.type === c.type && x.hopTtl === c.hopTtl && x.field === c.field) === i
   );
 
-  const critical = unique.some((c) => c.type === 'reachability' || c.type === 'packet_loss');
+  const critical = unique.some(
+    (c) => c.type === 'reachability' || c.type === 'packet_loss' || c.type === 'hop_as_change'
+  );
   const warning =
     unique.some(
       (c) =>
