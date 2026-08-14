@@ -1,4 +1,4 @@
-import { env } from '../config/env';
+import { getSettingNumber } from './settings';
 import type { ChangeDetail, ChangeSeverity } from '../models/ChangeEvent';
 import type { TraceHop, TraceReportDoc } from '../models/TraceReport';
 
@@ -66,7 +66,7 @@ export function buildHopDiff(prev: { hops: TraceHop[] }, curr: { hops: TraceHop[
       } else {
         const pct = rttDeltaPct(p.avgRtt, c.avgRtt);
         const abs = Math.abs((c.avgRtt ?? 0) - (p.avgRtt ?? 0));
-        if (pct !== null && pct >= env.rttChangePercentThreshold && abs >= env.rttChangeAbsThresholdMs) {
+        if (rttChanged(pct, abs)) {
           row.change = 'hop_rtt';
         }
       }
@@ -79,6 +79,14 @@ export function buildHopDiff(prev: { hops: TraceHop[] }, curr: { hops: TraceHop[
 function rttDeltaPct(a: number | null, b: number | null): number | null {
   if (a === null || b === null || a === 0) return null;
   return Math.round(((b - a) / a) * 1000) / 10;
+}
+
+/** Whether an RTT shift crosses the configured % and absolute-ms thresholds. */
+function rttChanged(pct: number | null, abs: number): boolean {
+  if (pct === null) return false;
+  const thresholdPct = getSettingNumber('rttChangePercentThreshold', 30);
+  const thresholdMs = getSettingNumber('rttChangeAbsThresholdMs', 15);
+  return pct >= thresholdPct && abs >= thresholdMs;
 }
 
 function fmtRtt(v: number | null): string {
@@ -132,7 +140,7 @@ export function compareReports(
   if (prev.ping.avgRtt !== null && curr.ping.avgRtt !== null) {
     const pct = rttDeltaPct(prev.ping.avgRtt, curr.ping.avgRtt);
     const abs = Math.abs(curr.ping.avgRtt - prev.ping.avgRtt);
-    if (pct !== null && pct >= env.rttChangePercentThreshold && abs >= env.rttChangeAbsThresholdMs) {
+    if (pct !== null && rttChanged(pct, abs)) {
       changes.push({
         type: 'rtt',
         field: 'avgRtt',
@@ -213,7 +221,7 @@ export function compareReports(
     if (p.avgRtt !== null && c.avgRtt !== null) {
       const pct = rttDeltaPct(p.avgRtt, c.avgRtt);
       const abs = Math.abs(c.avgRtt - p.avgRtt);
-      if (pct !== null && pct >= env.rttChangePercentThreshold && abs >= env.rttChangeAbsThresholdMs) {
+      if (pct !== null && rttChanged(pct, abs)) {
         changes.push({
           type: 'hop_rtt',
           hopTtl: ttl,

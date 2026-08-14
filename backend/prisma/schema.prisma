@@ -156,3 +156,14 @@ model PingSample {
   @@index([sampledAt(sort: Desc)])
   @@map("ping_samples")
 }
+
+/** Runtime-configurable application settings (key/value, DB-backed overrides
+ *  of environment-variable defaults). */
+model Setting {
+  key       String   @id @map("key")
+  value     Json     @map("value")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}

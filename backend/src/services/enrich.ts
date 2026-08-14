@@ -1,11 +1,11 @@
-import { env } from '../config/env';
 import prisma from '../config/prisma';
 import { lookupIp, mapLimit, resolveIp } from './rir';
+import { getSettingNumber } from './settings';
 import type { TraceHop } from '../models/TraceReport';
 
 /** Whether a destination's RIR attribution is fresh enough to skip re-lookup. */
 function isStale(enrichedAt: Date | null): boolean {
-  const ttl = env.rirCacheTtlHours * 3600 * 1000;
+  const ttl = getSettingNumber('rirCacheTtlHours', 24) * 3600 * 1000;
   if (!enrichedAt) return true;
   return Date.now() - enrichedAt.getTime() > ttl;
 }
@@ -58,7 +58,7 @@ export async function maybeEnrichDestination(destId: string, host: string): Prom
 export async function enrichHops(hops: TraceHop[]): Promise<TraceHop[]> {
   const ips = Array.from(new Set(hops.map((h) => h.ip).filter((ip): ip is string => !!ip)));
   const byIp = new Map<string, { asn: number | null; company: string }>();
-  await mapLimit(ips, env.rirEnrichConcurrency, async (ip) => {
+  await mapLimit(ips, getSettingNumber('rirEnrichConcurrency', 6), async (ip) => {
     try {
       const info = await lookupIp(ip);
       if (info) byIp.set(ip, { asn: info.asn, company: info.company || '' });
@@ -116,7 +116,7 @@ export async function enrichAllDestinations(): Promise<{
   const dests = await prisma.destination.findMany({ select: { id: true, host: true, name: true } });
   let enriched = 0;
   let failed = 0;
-  await mapLimit(dests, env.rirEnrichConcurrency, async (dest) => {
+  await mapLimit(dests, getSettingNumber('rirEnrichConcurrency', 6), async (dest) => {
     try {
       const data = await enrichDestinationHost(dest.host);
       await prisma.destination.update({

@@ -1,5 +1,5 @@
 import dns from 'node:dns/promises';
-import { env } from '../config/env';
+import { getSettingNumber } from './settings';
 
 /**
  * ASN + company attribution for a destination IP, sourced from Regional
@@ -19,7 +19,14 @@ export interface AsnInfo {
 }
 
 const cache = new Map<string, { info: AsnInfo | null; at: number }>();
-const CACHE_TTL = env.rirCacheTtlHours * 3600 * 1000;
+
+function cacheTtlMs(): number {
+  return getSettingNumber('rirCacheTtlHours', 24) * 3600 * 1000;
+}
+
+function requestTimeoutMs(): number {
+  return getSettingNumber('rirRequestTimeoutMs', 10000);
+}
 
 export async function resolveIp(host: string): Promise<string | null> {
   const trimmed = host.trim();
@@ -119,7 +126,7 @@ async function cymruAsName(asn: number): Promise<string | null> {
 async function rdapAsnName(asn: number): Promise<{ company: string | null; registry: string | null }> {
   try {
     const res = await fetch(`https://rdap.org/autnum/AS${asn}`, {
-      signal: AbortSignal.timeout(env.rirRequestTimeoutMs),
+      signal: AbortSignal.timeout(requestTimeoutMs()),
       redirect: 'follow',
       headers: { Accept: 'application/rdap+json, application/json' },
     });
@@ -138,7 +145,7 @@ async function rdapAsnName(asn: number): Promise<{ company: string | null; regis
 async function rdapIpOrg(ip: string): Promise<string | null> {
   try {
     const res = await fetch(`https://rdap.org/ip/${ip}`, {
-      signal: AbortSignal.timeout(env.rirRequestTimeoutMs),
+      signal: AbortSignal.timeout(requestTimeoutMs()),
       redirect: 'follow',
       headers: { Accept: 'application/rdap+json, application/json' },
     });
@@ -152,7 +159,7 @@ async function rdapIpOrg(ip: string): Promise<string | null> {
 /** Full lookup: cymru first, then RDAP to refine the org name / registry. */
 export async function lookupIp(ip: string): Promise<AsnInfo | null> {
   const cached = cache.get(ip);
-  if (cached && Date.now() - cached.at < CACHE_TTL) return cached.info;
+  if (cached && Date.now() - cached.at < cacheTtlMs()) return cached.info;
 
   const base = await cymruLookup(ip);
   let info: AsnInfo | null = null;

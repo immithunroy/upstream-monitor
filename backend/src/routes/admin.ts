@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { env } from '../config/env';
 import { issueAdminToken } from '../middleware/auth';
+import { verifyAdminPassword } from '../services/settings';
 
 const router = Router();
 
 router.post('/login', (req, res) => {
   const { password } = req.body || {};
-  if (typeof password !== 'string' || password !== env.adminPassword) {
+  if (typeof password !== 'string' || !verifyAdminPassword(password)) {
     res.status(401).json({ error: 'Invalid admin password' });
     return;
   }

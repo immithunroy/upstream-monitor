@@ -5,6 +5,7 @@ import { env } from './config/env';
 import apiRouter from './routes';
 import { startScheduler } from './services/scheduler';
 import { seedDestinations } from './services/seed';
+import { loadSettings } from './services/settings';
 
 const app = express();
 
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  await loadSettings();
   await seedDestinations();
 
   // RIR ASN/company enrichment for the freshly seeded targets, in the background.

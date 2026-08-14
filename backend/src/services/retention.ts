@@ -1,12 +1,14 @@
 import prisma from '../config/prisma';
-import { env } from '../config/env';
+import { getSettingNumber } from './settings';
 
 /**
- * Deletes monitoring data older than RETENTION_DAYS (default 365).
- * Runs daily via the scheduler so the database never grows without bound.
+ * Deletes monitoring data older than the configured retention window
+ * (default 365 days, tunable from Settings). Runs daily via the scheduler so
+ * the database never grows without bound.
  */
 export async function runRetention(): Promise<{ traceReports: number; pingSamples: number; changeEvents: number }> {
-  const cutoff = new Date(Date.now() - env.retentionDays * 24 * 3600 * 1000);
+  const retentionDays = getSettingNumber('retentionDays', 365);
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1000);
 
   const [traceReports, pingSamples, changeEvents] = await Promise.all([
     prisma.traceReport.deleteMany({ where: { startedAt: { lt: cutoff } } }),

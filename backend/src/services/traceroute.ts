@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import os from 'node:os';
-import { env } from '../config/env';
+import { getSettingNumber } from './settings';
 import type { PingResult, TraceHop } from '../models/TraceReport';
 
 export interface TraceOutcome {
@@ -96,10 +96,12 @@ function parsePingWindows(out: string): PingResult {
 }
 
 export async function runPing(host: string): Promise<PingResult> {
+  const pingCount = getSettingNumber('pingCount', 10);
+  const pingTimeoutMs = getSettingNumber('pingTimeoutMs', 2500);
   const args = isWindows
-    ? ['-n', String(env.pingCount), '-w', String(env.pingTimeoutMs), host]
-    : ['-c', String(env.pingCount), '-W', String(Math.round(env.pingTimeoutMs / 1000)), host];
-  const out = await run('ping', args, env.pingCount * env.pingTimeoutMs + 5000);
+    ? ['-n', String(pingCount), '-w', String(pingTimeoutMs), host]
+    : ['-c', String(pingCount), '-W', String(Math.round(pingTimeoutMs / 1000)), host];
+  const out = await run('ping', args, pingCount * pingTimeoutMs + 5000);
   return isWindows ? parsePingWindows(out) : parsePingLinux(out);
 }
 
@@ -159,22 +161,24 @@ function parseWindowsLine(line: string): TraceHop | null {
 }
 
 export async function runTraceroute(host: string): Promise<TraceHop[]> {
+  const traceMaxHops = getSettingNumber('traceMaxHops', 30);
+  const traceTimeoutSeconds = getSettingNumber('traceTimeoutSeconds', 4);
   const args = isWindows
-    ? ['-d', '-h', String(env.traceMaxHops), '-w', String(env.traceTimeoutSeconds), host]
+    ? ['-d', '-h', String(traceMaxHops), '-w', String(traceTimeoutSeconds), host]
     : [
         // ICMP echo mode (-I): the destination answers ICMP (ping works) but may
         // silently drop UDP traceroute probes, which would hide the final hop.
         '-I',
         '-m',
-        String(env.traceMaxHops),
+        String(traceMaxHops),
         '-w',
-        String(env.traceTimeoutSeconds),
+        String(traceTimeoutSeconds),
         '-q',
         '2',
         '-n',
         host,
       ];
-  const out = await run(isWindows ? 'tracert' : 'traceroute', args, env.traceMaxHops * env.traceTimeoutSeconds * 1000 + 15000);
+  const out = await run(isWindows ? 'tracert' : 'traceroute', args, traceMaxHops * traceTimeoutSeconds * 1000 + 15000);
 
   const hops: TraceHop[] = [];
   const lines = out.split(/\r?\n/);

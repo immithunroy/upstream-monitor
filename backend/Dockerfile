@@ -24,4 +24,7 @@ COPY prisma ./prisma
 COPY --from=build /app/dist ./dist
 EXPOSE 5020
 
-CMD ["node", "dist/server.js"]
+# Apply any pending Prisma migrations before serving traffic so a deploy is a
+# single `docker compose up -d --build` (idempotent — prisma tracks applied ones).
+# Retries until Postgres accepts connections, then starts the server.
+CMD ["sh", "-c", "i=0; until npx prisma migrate deploy; do i=$((i+1)); if [ $i -ge 30 ]; then echo 'prisma migrate deploy failed after 30 attempts'; exit 1; fi; echo 'waiting for database, retrying...'; sleep 2; done && node dist/server.js"]
