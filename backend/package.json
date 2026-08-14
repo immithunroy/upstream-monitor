@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "tsx scripts/e2e.ts",
     "test:smoke": "tsx scripts/smoke.ts",
+    "test:comparator": "tsx scripts/test-comparator.ts",
     "test:rir": "tsx scripts/test-rir.ts",
     "test:traceroute": "tsx scripts/test-traceroute.ts",
     "db:migrate": "prisma migrate deploy",

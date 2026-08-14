@@ -1,3 +1,5 @@
+name: upstrean-monitor
+
 services:
   postgres:
     image: postgres:18-alpine
@@ -16,6 +18,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres-password}
 
   backend:
+    image: ghcr.io/immithunroy/upstream-monitor-backend:${UPSTREAM_IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -52,6 +55,7 @@ services:
       - postgres
 
   frontend:
+    image: ghcr.io/immithunroy/upstream-monitor-frontend:${UPSTREAM_IMAGE_TAG:-latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile
