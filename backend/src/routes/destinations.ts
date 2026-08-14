@@ -1,10 +1,40 @@
 import { Router } from 'express';
+import multer from 'multer';
 import prisma from '../config/prisma';
 import { requireAdmin } from '../middleware/auth';
 import { enrichAllDestinations, enrichDestinationHost } from '../services/enrich';
+import { buildImportTemplate, importDestinations, parseImportBuffer } from '../services/importDestinations';
 import { destToApi } from '../lib/mappers';
 
 const router = Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+/** Download an .xlsx template for bulk destination uploads. */
+router.get('/import/template', (_req, res) => {
+  const buf = buildImportTemplate();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="destinations-template.xlsx"');
+  res.send(buf);
+});
+
+/** Bulk-upload destinations from an XLSX/CSV file (admin). */
+router.post('/import', requireAdmin, upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    res.status(400).json({ error: 'No file uploaded (expected multipart field "file")' });
+    return;
+  }
+  try {
+    const rows = parseImportBuffer(req.file.buffer);
+    const result = await importDestinations(rows);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: `Could not parse file: ${(err as Error).message}` });
+  }
+});
 
 router.get('/', async (_req, res) => {
   const dests = await prisma.destination.findMany({ orderBy: { name: 'asc' } });
