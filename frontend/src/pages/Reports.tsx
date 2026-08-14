@@ -17,7 +17,7 @@ export default function Reports() {
   const [tab, setTab] = useState<'summary' | 'raw'>('summary');
   const [dests, setDests] = useState<Destination[]>([]);
   const [destinationId, setDestinationId] = useState(searchParams.get('destination') || '');
-  const [period, setPeriod] = useState<ReportPeriod>('weekly');
+  const [period, setPeriod] = useState<ReportPeriod>('daily');
   const [report, setReport] = useState<PeriodReport | null>(null);
 
   const [reports, setReports] = useState<TraceReport[]>([]);
