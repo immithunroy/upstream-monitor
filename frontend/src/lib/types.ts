@@ -199,3 +199,37 @@ export interface ReportCompare {
   diff: HopDiff[];
   hasPrevious: boolean;
 }
+
+export interface AppSettings {
+  retentionDays: number;
+  traceCron: string;
+  pingIntervalMinutes: number;
+  pingCount: number;
+  pingTimeoutMs: number;
+  traceMaxHops: number;
+  traceTimeoutSeconds: number;
+  rttChangePercentThreshold: number;
+  rttChangeAbsThresholdMs: number;
+  packetLossThreshold: number;
+  rirCacheTtlHours: number;
+  rirEnrichConcurrency: number;
+  rirRequestTimeoutMs: number;
+}
+
+export interface SettingsResponse {
+  settings: AppSettings;
+  storage: {
+    traceReports: number;
+    pingSamples: number;
+    changeEvents: number;
+    destinations: number;
+  };
+}
+
+export interface ImportResult {
+  total: number;
+  created: number;
+  skipped: number;
+  failed: number;
+  errors: Array<{ row: number; host: string; error: string }>;
+}

@@ -9,7 +9,10 @@ const links = [
   { to: '/changes', label: 'Changes' },
 ];
 
-const adminLinks = [{ to: '/destinations', label: 'Destinations' }];
+const adminLinks = [
+  { to: '/destinations', label: 'Destinations' },
+  { to: '/settings', label: 'Settings' },
+];
 
 export default function Layout() {
   const navigate = useNavigate();

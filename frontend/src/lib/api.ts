@@ -1,7 +1,7 @@
 import { getToken } from './auth';
 import type {
-  ChangeEvent, Destination, Paginated, PeriodReport, PingSample, ReportCompare, ReportPeriod, SearchResults, Stats,
-  TraceReport, TrendPoint,
+  AppSettings, ChangeEvent, Destination, ImportResult, Paginated, PeriodReport, PingSample, ReportCompare,
+  ReportPeriod, SearchResults, SettingsResponse, Stats, TraceReport, TrendPoint,
 } from './types';
 
 const BASE = '/api';
@@ -17,6 +17,38 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error((body as { error?: string } | null)?.error || `Request failed (${res.status})`);
   }
   return res.json() as Promise<T>;
+}
+
+async function requestWithFile<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append('file', file);
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: form });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error((body as { error?: string } | null)?.error || `Request failed (${res.status})`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function downloadFile(path: string, fallbackName: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${BASE}${path}`, { headers });
+  if (!res.ok) throw new Error(`Download failed (${res.status})`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fallbackName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export const api = {
@@ -90,4 +122,23 @@ export const api = {
 
   /* --- global search --- */
   search: (q: string) => request<SearchResults>(`/search?q=${encodeURIComponent(q)}`),
+
+  /* --- settings & admin --- */
+  getSettings: () => request<SettingsResponse>('/settings'),
+  updateSettings: (patch: Partial<AppSettings>) =>
+    request<{ settings: AppSettings }>('/settings', { method: 'PUT', body: JSON.stringify(patch) }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>('/settings/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  runRetentionNow: () =>
+    request<{ ok: boolean; retentionDays: number; deleted: { traceReports: number; pingSamples: number; changeEvents: number } }>(
+      '/settings/retention/run',
+      { method: 'POST', body: JSON.stringify({}) }
+    ),
+
+  /* --- destination bulk import --- */
+  downloadImportTemplate: () => downloadFile('/destinations/import/template', 'destinations-template.xlsx'),
+  importDestinations: (file: File) => requestWithFile<ImportResult>('/destinations/import', file),
 };
