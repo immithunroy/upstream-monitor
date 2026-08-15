@@ -313,7 +313,13 @@ export default function Reports() {
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">
                 Destinations — {period} ({report.destinations.length})
               </h2>
-              <div className="mb-3">
+              <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
+                <input
+                  className="input w-64"
+                  placeholder="Search name, host, ASN, company…"
+                  value={sumQuery}
+                  onChange={(e) => setSumQuery(e.target.value)}
+                />
                 <Pagination page={sumCurrentPage} pages={sumPages} onPage={setSumPage} />
               </div>
               <div className="overflow-x-auto">
@@ -377,13 +383,7 @@ export default function Reports() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
-                <input
-                  className="input w-64"
-                  placeholder="Search name, host, ASN, company…"
-                  value={sumQuery}
-                  onChange={(e) => setSumQuery(e.target.value)}
-                />
+              <div className="mt-3">
                 <Pagination page={sumCurrentPage} pages={sumPages} onPage={setSumPage} />
               </div>
             </div>
@@ -393,7 +393,13 @@ export default function Reports() {
         <Spinner label="Loading reports…" />
       ) : (
         <div className="card">
-          <div className="mb-3">
+          <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
+            <input
+              className="input w-64"
+              placeholder="Search name, host, ASN, company…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
             <Pagination page={page} pages={pages} onPage={setPage} />
           </div>
           <div className="overflow-x-auto">
@@ -465,13 +471,7 @@ export default function Reports() {
             </table>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
-            <input
-              className="input w-64"
-              placeholder="Search name, host, ASN, company…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+          <div className="mt-4">
             <Pagination page={page} pages={pages} onPage={setPage} />
           </div>
         </div>

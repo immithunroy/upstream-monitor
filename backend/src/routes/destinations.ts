@@ -4,7 +4,6 @@ import prisma from '../config/prisma';
 import { requireAdmin } from '../middleware/auth';
 import { enrichAllDestinations, enrichDestinationHost } from '../services/enrich';
 import { buildImportTemplate, importDestinations, parseImportBuffer } from '../services/importDestinations';
-import { buildDestinationReport } from '../services/destinationReport';
 import { destToApi } from '../lib/mappers';
 
 const router = Router();
@@ -40,21 +39,6 @@ router.post('/import', requireAdmin, upload.single('file'), async (req, res) => 
 router.get('/', async (_req, res) => {
   const dests = await prisma.destination.findMany({ orderBy: { name: 'asc' } });
   res.json(dests.map(destToApi));
-});
-
-router.get('/:id/report.pdf', async (req, res) => {
-  try {
-    const pdf = await buildDestinationReport(req.params.id);
-    if (!pdf) {
-      res.status(404).json({ error: 'Destination not found' });
-      return;
-    }
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="report-${req.params.id}.pdf"`);
-    res.send(pdf);
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-  }
 });
 
 router.get('/:id', async (req, res) => {

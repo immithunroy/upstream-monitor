@@ -77,8 +77,6 @@ export const api = {
     ),
   enrichDestinations: () =>
     request<{ total: number; enriched: number; failed: number }>('/destinations/enrich', { method: 'POST' }),
-  downloadDestinationReport: (id: string) =>
-    downloadFile(`/destinations/${id}/report.pdf`, `report-${id}.pdf`),
 
   listReports: (params?: { destinationId?: string; search?: string; page?: number; limit?: number }) => {
     const qs = new URLSearchParams();

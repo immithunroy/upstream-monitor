@@ -8,6 +8,7 @@ import type { ChangeEvent, Destination, PeriodReport, PingSample, ReportCompare,
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import { CATEGORY_LABEL, fmtAgo, fmtDate, fmtRtt, periodTick } from '../lib/format';
+import { buildDestinationTextReport, downloadText, exportTraceText } from '../lib/textReport';
 import { isAuthed } from '../lib/auth';
 
 const PERIODS: ReportPeriod[] = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'yearly'];
@@ -52,7 +53,7 @@ export default function DestinationDetail() {
   const [error, setError] = useState('');
   const [tracing, setTracing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [pdfBusy, setPdfBusy] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
   const [sortKey, setSortKey] = useState<string>('time');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const authed = isAuthed();
@@ -151,17 +152,29 @@ export default function DestinationDetail() {
     });
   }, [expandedIds, reports, compares]);
 
-  async function downloadReport() {
+  async function downloadTextReport() {
     if (!dest) return;
-    setPdfBusy(true);
+    setReportBusy(true);
     setError('');
     try {
-      await api.downloadDestinationReport(dest._id);
+      const text = buildDestinationTextReport({
+        dest,
+        reports,
+        events,
+        pings,
+        periodReport,
+      });
+      const host = dest.host.replace(/[^a-zA-Z0-9.-]+/g, '-');
+      downloadText(`report-${host}.txt`, text);
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setPdfBusy(false);
+      setReportBusy(false);
     }
+  }
+
+  function downloadTrace(report: TraceReport) {
+    downloadText(`trace-${report.destHost}-${report.startedAt.slice(0, 16).replace(/[:T]/g, '-')}.txt`, exportTraceText(report));
   }
 
   async function traceNow() {
@@ -193,34 +206,6 @@ export default function DestinationDetail() {
     } finally {
       setDeleting(false);
     }
-  }
-
-  function exportTraceText(report: TraceReport): string {
-    const lines: string[] = [];
-    lines.push(`Upstream Monitor — Network path export`);
-    lines.push(`Destination: ${report.destName || report.destHost}`);
-    lines.push(`Host: ${report.destHost}`);
-    lines.push(`Trace time: ${fmtDate(report.startedAt)}`);
-    lines.push(`Result: ${report.reachable ? 'reachable' : 'unreachable'}`);
-    lines.push(
-      `Ping: min=${fmtRtt(report.ping.minRtt)} max=${fmtRtt(report.ping.maxRtt)} avg=${fmtRtt(report.ping.avgRtt)} loss=${report.ping.lossPercent}%`
-    );
-    lines.push('');
-    lines.push('TTL\tIP\tASN\tCompany\tAvg RTT');
-    for (const h of report.hops) {
-      lines.push(`${h.ttl}\t${h.ip ?? '*'}${h.host ? ` (${h.host})` : ''}\t${h.asn ? `AS${h.asn}` : '—'}\t${h.company || '—'}\t${fmtRtt(h.avgRtt)}`);
-    }
-    return lines.join('\n');
-  }
-
-  function downloadTrace(report: TraceReport) {
-    const blob = new Blob([exportTraceText(report)], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `trace-${report.destHost}-${report.startedAt.slice(0, 16).replace(/[:T]/g, '-')}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   if (loading) return <Spinner label="Loading destination…" />;
@@ -272,8 +257,8 @@ export default function DestinationDetail() {
             </div>
           )}
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button className="btn-ghost" onClick={downloadReport} disabled={pdfBusy}>
-              {pdfBusy ? 'Preparing…' : 'Download PDF report'}
+            <button className="btn-ghost" onClick={downloadTextReport} disabled={reportBusy}>
+              {reportBusy ? 'Preparing…' : 'Download text report'}
             </button>
             {authed && (
               <>

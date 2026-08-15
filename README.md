@@ -99,23 +99,28 @@ You can add, edit, enable/disable, trace, or delete destinations — or wipe all
 ### Dashboard
 - Clickable stat cards: **Destinations**, **Reachable**, **Unreachable**, **Uptime (24h)**, **Avg ping (now)** (global network health = average of the latest ping latency across all destinations), **Unacknowledged changes** — each navigates to the relevant filtered view.
 - **Network health** chart with **Daily / Weekly / Monthly / Quarterly / Half-yearly / Yearly** tabs — one graph, period-aware x-axis labels.
-- **Latest per-destination status** table (with serial numbers): reachable/unreachable, avg RTT, loss %, hops, last run.
+- **Latest per-destination status** table (with serial numbers): reachable/unreachable, avg RTT, loss %, hops, last run — every table ships with a **top search box** (right before the page-number bar) and **50-row pagination** controls above and below.
 
 ### Reports
 - **Period summaries** (`daily`, `weekly`, `monthly`, `quarterly`, `half-yearly`, `yearly` — `daily` is selected by default) with uptime %, avg RTT, change counts, and per-destination tables.
-- **Raw report browser** — paginated trace reports; click a row to open the hop-by-hop table vs the previous report.
+- **Raw report browser** — paginated trace reports (50 per page, searchable); click a row to open the hop-by-hop table vs the previous report.
 
 ### Destination detail
 - ASN, company, registry, country, **resolved IP with live min / avg / max ping latency**, prefix.
 - **Latency history** chart with the 6 period tabs, plus the **5-minute ping sample** chart (min/avg/max).
 - **Trace now**, **Edit destination**, **Delete all data** buttons (admin).
 - **Network path — hop-by-hop**: every trace listed as an expandable row (date/time, reachability, avg RTT, loss, hop count). Expand any number of traces side-by-side to compare, or **Export** a trace as a text file. The compare table shows `Current IP`, `Previous IP`, a **Change** tag, and an **AS Change** column (`prev AS → curr AS`, red/critical on route changes).
+- **Download text report** — exports a comprehensive, human-readable report covering every monitored detail: destination info and RIR attribution, **24-hour network health** with an uptime bar and a Unicode **latency sparkline**, the latest trace (ping/RTT/path), the hop-by-hop table, recent traces and recent change events. Reports are rendered with box-drawing tables (`┌─┬─┐`), block bars (`█░`) and severity glyphs (`✖ ▲ ℹ`) — pure UTF-8 text that opens anywhere.
 
 ### Changes
 - Full change log with severity badges, old → new values, per-event **acknowledge**, and a global **Acknowledge all** button. Filter by destination and severity.
 
 ### Global search
 - Header search across destinations, ASNs, companies, change events and reports.
+
+### Table search & pagination
+- Every data table (Dashboard status, Reports summary & raw, Destinations) has a **search box** that filters rows instantly, placed **right before the page-number bar** at the top of the table.
+- Rows are paginated **50 per page**; page-number controls appear at the top (next to search) and again at the bottom.
 
 ### Theme & layout
 - **Light / dark** toggle (light is the default), persisted in the browser.
@@ -253,7 +258,7 @@ upstrean-monitor/
 │       ├── pages/               # Dashboard, Destinations, Destination detail, Reports,
 │       │                        #   Changes, Settings, Login
 │       ├── components/          # Layout, GlobalSearch, ThemeToggle, StatCard, Badge, ...
-│       └── lib/                 # api client, auth, theme, types, formatters
+│       └── lib/                 # api client, auth, theme, types, formatters, text-report generator
 └── docker-compose.yml           # postgres + backend + frontend
 ```
 
