@@ -230,13 +230,7 @@ export default function Dashboard() {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">
           Latest per-destination status
         </h2>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <input
-            className="input max-w-xs"
-            placeholder="Search name, host, ASN, company…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+        <div className="mb-3">
           <Pagination page={currentPage} pages={pages} onPage={setPage} />
         </div>
         <div className="overflow-x-auto">
@@ -314,7 +308,13 @@ export default function Dashboard() {
             </tbody>
           </table>
         </div>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
+          <input
+            className="input w-64"
+            placeholder="Search name, host, ASN, company…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           <Pagination page={currentPage} pages={pages} onPage={setPage} />
         </div>
       </div>

@@ -52,6 +52,7 @@ export default function DestinationDetail() {
   const [error, setError] = useState('');
   const [tracing, setTracing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [sortKey, setSortKey] = useState<string>('time');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const authed = isAuthed();
@@ -149,6 +150,19 @@ export default function DestinationDetail() {
         .catch(() => setCompares((prev) => ({ ...prev, [r._id]: null })));
     });
   }, [expandedIds, reports, compares]);
+
+  async function downloadReport() {
+    if (!dest) return;
+    setPdfBusy(true);
+    setError('');
+    try {
+      await api.downloadDestinationReport(dest._id);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   async function traceNow() {
     if (!dest) return;
@@ -257,17 +271,22 @@ export default function DestinationDetail() {
               <div className="text-xs text-tx3">{fmtAgo(latest.startedAt)}</div>
             </div>
           )}
-          {authed && (
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button className="btn-primary" onClick={traceNow} disabled={tracing}>
-                {tracing ? 'Tracing…' : 'Trace now'}
-              </button>
-              <button className="btn-ghost" onClick={() => navigate(`/destinations?edit=${dest._id}`)}>Edit destination</button>
-              <button className="btn-ghost text-red-600 dark:text-red-400" onClick={deleteAllData} disabled={deleting}>
-                {deleting ? 'Deleting…' : 'Delete all data'}
-              </button>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button className="btn-ghost" onClick={downloadReport} disabled={pdfBusy}>
+              {pdfBusy ? 'Preparing…' : 'Download PDF report'}
+            </button>
+            {authed && (
+              <>
+                <button className="btn-primary" onClick={traceNow} disabled={tracing}>
+                  {tracing ? 'Tracing…' : 'Trace now'}
+                </button>
+                <button className="btn-ghost" onClick={() => navigate(`/destinations?edit=${dest._id}`)}>Edit destination</button>
+                <button className="btn-ghost text-red-600 dark:text-red-400" onClick={deleteAllData} disabled={deleting}>
+                  {deleting ? 'Deleting…' : 'Delete all data'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
