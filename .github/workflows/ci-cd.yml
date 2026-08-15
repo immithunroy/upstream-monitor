@@ -150,6 +150,13 @@ jobs:
             "${{ secrets.DEPLOY_USER || 'root' }}@${{ secrets.DEPLOY_HOST }}" '
             set -e
             cd /opt/upstrean-monitor
+            echo "== freeing disk before pull =="
+            # Remove all of this project's stale images (in-use ones are kept
+            # automatically), plus unreferenced dangling images and the shared
+            # build cache. Running containers are untouched.
+            docker image prune -f --filter "reference=ghcr.io/immithunroy/upstream-monitor-*" || true
+            docker image prune -f --filter "dangling=true" || true
+            docker builder prune -f || true
             echo "== pulling new images =="
             docker compose pull backend frontend
             echo "== recreating backend + frontend only =="
@@ -158,8 +165,9 @@ jobs:
             sleep 5
             curl -fsS http://127.0.0.1:5020/api/health && echo " backend OK"
             curl -fsS -o /dev/null http://127.0.0.1:8010/ && echo " frontend OK"
-            echo "== pruning only this project old images (never other apps) =="
-            docker image prune -f --filter "reference=ghcr.io/immithunroy/upstream-monitor-*" --filter "dangling=true" || true
+            echo "== final prune: this project old images (never other apps) =="
+            docker image prune -f --filter "reference=ghcr.io/immithunroy/upstream-monitor-*" || true
+            docker image prune -f --filter "dangling=true" || true
           '
 
       - name: Notify failure
