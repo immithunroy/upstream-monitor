@@ -8,6 +8,11 @@ const linuxOutput = [
   ' 5  one.one.one.one (1.1.1.1)  3.678 ms  4.816 ms  3.737 ms',
 ];
 
+const ipv6Output = [
+  ' 1  2001:0db8:85a3:0000:0000:8a2e:0370:7334  0.443 ms  0.382 ms  0.365 ms',
+  ' 2  2001:4860:4860::8888  3.122 ms  3.047 ms  3.231 ms',
+];
+
 let failures = 0;
 
 for (const [idx, line] of linuxOutput.entries()) {
@@ -35,6 +40,28 @@ for (const [idx, line] of linuxOutput.entries()) {
     }
   } catch (e) {
     console.error(`line ${idx + 1}: threw: ${e instanceof Error ? e.message : e}`);
+    failures++;
+  }
+}
+
+for (const [idx, line] of ipv6Output.entries()) {
+  try {
+    const hop = parseLinuxLine(line);
+    if (!hop) {
+      console.error(`ipv6 line ${idx + 1}: expected a hop, got null`);
+      failures++;
+      continue;
+    }
+    if (hop.rtts.length !== 3) {
+      console.error(`ipv6 line ${idx + 1}: expected 3 rtts, got ${hop.rtts.length}`);
+      failures++;
+    }
+    if (!hop.ip || !hop.ip.includes(':')) {
+      console.error(`ipv6 line ${idx + 1}: expected an IPv6 address, got ${hop.ip}`);
+      failures++;
+    }
+  } catch (e) {
+    console.error(`ipv6 line ${idx + 1}: threw: ${e instanceof Error ? e.message : e}`);
     failures++;
   }
 }

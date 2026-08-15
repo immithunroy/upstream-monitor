@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import net from 'node:net';
+import dns from 'node:dns/promises';
 import os from 'node:os';
 import { getSettingNumber } from './settings';
 import type { PingResult, TraceHop } from '../models/TraceReport';
@@ -35,6 +36,25 @@ function num(v: string | undefined): number | null {
   if (v === undefined) return null;
   const n = Number.parseFloat(v.replace(',', '.'));
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Resolve a destination to a concrete IP before probing. This matters for IPv6:
+ * net.isIP() only recognises literal addresses, so a hostname that resolves to
+ * an AAAA record (or an IPv6 literal wrapped in brackets) would otherwise be
+ * probed over IPv4 and fail. Resolving first guarantees the `-6` family flag is
+ * applied for IPv6 targets while keeping hostname destinations working.
+ */
+async function resolveHost(host: string): Promise<string> {
+  let h = host.trim();
+  if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1);
+  if (net.isIP(h) === 4 || net.isIP(h) === 6) return h;
+  try {
+    const lookups = await dns.lookup(h, { all: true });
+    return lookups[0]?.address ?? h;
+  } catch {
+    return h;
+  }
 }
 
 /* ------------------------------ PING ------------------------------ */
@@ -97,12 +117,13 @@ function parsePingWindows(out: string): PingResult {
 }
 
 export async function runPing(host: string): Promise<PingResult> {
+  const target = await resolveHost(host);
   const pingCount = getSettingNumber('pingCount', 10);
   const pingTimeoutMs = getSettingNumber('pingTimeoutMs', 2500);
-  const ipv6 = net.isIP(host) === 6;
+  const ipv6 = net.isIP(target) === 6;
   const args = isWindows
-    ? ['-n', String(pingCount), '-w', String(pingTimeoutMs), ...(ipv6 ? ['-6'] : []), host]
-    : ['-c', String(pingCount), '-W', String(Math.round(pingTimeoutMs / 1000)), ...(ipv6 ? ['-6'] : []), host];
+    ? ['-n', String(pingCount), '-w', String(pingTimeoutMs), ...(ipv6 ? ['-6'] : []), target]
+    : ['-c', String(pingCount), '-W', String(Math.round(pingTimeoutMs / 1000)), ...(ipv6 ? ['-6'] : []), target];
   const out = await run('ping', args, pingCount * pingTimeoutMs + 5000);
   return isWindows ? parsePingWindows(out) : parsePingLinux(out);
 }
@@ -119,7 +140,7 @@ const MS_RE = /([\d.,]+)\s*ms/g;
  */
 function extractIp(rest: string): string | null {
   for (const tok of rest.split(/\s+/)) {
-    const clean = tok.replace(/%[0-9a-zA-Z]+$/, '');
+    const clean = tok.replace(/^\(|\)$/g, '').replace(/%[0-9a-zA-Z]+$/, '');
     if (net.isIP(clean) === 4 || net.isIP(clean) === 6) return clean;
   }
   return null;
@@ -173,11 +194,12 @@ function parseWindowsLine(line: string): TraceHop | null {
 }
 
 export async function runTraceroute(host: string): Promise<TraceHop[]> {
+  const target = await resolveHost(host);
   const traceMaxHops = getSettingNumber('traceMaxHops', 30);
   const traceTimeoutSeconds = getSettingNumber('traceTimeoutSeconds', 4);
-  const ipv6 = net.isIP(host) === 6;
+  const ipv6 = net.isIP(target) === 6;
   const args = isWindows
-    ? ['-6', '-d', '-h', String(traceMaxHops), '-w', String(traceTimeoutSeconds), host]
+    ? ['-6', '-d', '-h', String(traceMaxHops), '-w', String(traceTimeoutSeconds), target]
     : [
         ...(ipv6 ? ['-6'] : []),
         // ICMP echo mode (-I): the destination answers ICMP (ping works) but may
@@ -190,7 +212,7 @@ export async function runTraceroute(host: string): Promise<TraceHop[]> {
         '-q',
         '2',
         '-n',
-        host,
+        target,
       ];
   const out = await run(isWindows ? 'tracert' : 'traceroute', args, traceMaxHops * traceTimeoutSeconds * 1000 + 15000);
 
@@ -210,7 +232,8 @@ function fingerprint(hops: TraceHop[]): string {
 }
 
 export async function runTrace(host: string): Promise<TraceOutcome> {
-  const [ping, hops] = await Promise.all([runPing(host), runTraceroute(host)]);
+  const target = await resolveHost(host);
+  const [ping, hops] = await Promise.all([runPing(target), runTraceroute(target)]);
   const reachable = ping.packetsReceived > 0 || hops.some((h) => h.status === 'reachable');
   return { reachable, ping, hops, pathFingerprint: fingerprint(hops) };
 }

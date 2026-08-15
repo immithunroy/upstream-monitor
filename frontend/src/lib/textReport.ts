@@ -69,6 +69,7 @@ interface BoxCol {
   min?: number;
   max?: number;
   flex?: number;
+  noShrink?: boolean;
 }
 
 function truncate(s: string, w: number): string {
@@ -97,16 +98,18 @@ function boxTable(cols: BoxCol[], rows: string[][], target = W): string[] {
     }
     if (extra > 0) widths[n - 1] += extra;
   } else if (used > budget) {
+    // Shrink flexible columns first, but never shrink columns marked noShrink
+    // (e.g. IP / ASN must always render in full). If the fixed columns still
+    // exceed the report width, the table simply renders a little wider.
     let over = used - budget;
-    const order = [...Array(n).keys()].sort((a, b) => (cols[a].flex ?? 1) - (cols[b].flex ?? 1));
-    for (const i of order) {
+    const shrinkable = [...Array(n).keys()].filter((i) => !cols[i].noShrink && widths[i] > (cols[i].min ?? 1));
+    shrinkable.sort((a, b) => (cols[a].flex ?? 1) - (cols[b].flex ?? 1));
+    for (const i of shrinkable) {
       if (over <= 0) break;
       const min = cols[i].min ?? 1;
-      if (widths[i] > min) {
-        const s = Math.min(widths[i] - min, over);
-        widths[i] -= s;
-        over -= s;
-      }
+      const s = Math.min(widths[i] - min, over);
+      widths[i] -= s;
+      over -= s;
     }
   }
   const line = (l: string, m: string, r: string) =>
@@ -124,9 +127,9 @@ function boxTable(cols: BoxCol[], rows: string[][], target = W): string[] {
 
 const PATH_COLS: BoxCol[] = [
   { header: 'TTL', align: 'right', min: 3, max: 5, flex: 0 },
-  { header: 'IP', min: 8, max: 36, flex: 3 },
-  { header: 'ASN', min: 6, max: 11, flex: 0 },
-  { header: 'Company', min: 14, max: 50, flex: 7 },
+  { header: 'IP', min: 8, max: 46, flex: 0, noShrink: true },
+  { header: 'ASN', min: 7, max: 13, flex: 0, noShrink: true },
+  { header: 'Company', min: 14, max: 60, flex: 1 },
   { header: 'Avg RTT', align: 'right', min: 8, max: 12, flex: 0 },
 ];
 
