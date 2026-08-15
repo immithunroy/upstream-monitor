@@ -63,15 +63,56 @@ function sparkline(values: Array<number | null>, width = 60): string {
     .join('');
 }
 
-function boxTable(
-  cols: Array<{ header: string; width: number; align?: 'left' | 'right' | 'center' }>,
-  rows: string[][]
-): string[] {
-  const widths = cols.map((c) => c.width);
+interface BoxCol {
+  header: string;
+  align?: 'left' | 'right' | 'center';
+  min?: number;
+  max?: number;
+  flex?: number;
+}
+
+function truncate(s: string, w: number): string {
+  if (s.length <= w) return s;
+  return s.slice(0, Math.max(1, w - 1)) + '…';
+}
+
+function boxTable(cols: BoxCol[], rows: string[][], target = W): string[] {
+  const n = cols.length;
+  const natural = cols.map((c, i) => {
+    let w = c.header.length;
+    for (const r of rows) w = Math.max(w, (r[i] ?? '').length);
+    return w;
+  });
+  const borders = n * 2 + (n + 1);
+  const budget = Math.max(1, target - borders);
+  const widths = natural.map((w, i) => Math.max(cols[i].min ?? 1, Math.min(w, cols[i].max ?? Infinity)));
+  let used = widths.reduce((a, b) => a + b, 0);
+  if (used < budget) {
+    const flexSum = cols.reduce((a, c) => a + (c.flex ?? 1), 0);
+    let extra = budget - used;
+    for (let i = 0; i < n; i++) {
+      const share = Math.floor((extra * (cols[i].flex ?? 1)) / flexSum);
+      widths[i] += share;
+      extra -= share;
+    }
+    if (extra > 0) widths[n - 1] += extra;
+  } else if (used > budget) {
+    let over = used - budget;
+    const order = [...Array(n).keys()].sort((a, b) => (cols[a].flex ?? 1) - (cols[b].flex ?? 1));
+    for (const i of order) {
+      if (over <= 0) break;
+      const min = cols[i].min ?? 1;
+      if (widths[i] > min) {
+        const s = Math.min(widths[i] - min, over);
+        widths[i] -= s;
+        over -= s;
+      }
+    }
+  }
   const line = (l: string, m: string, r: string) =>
     l + widths.map((w) => rep('─', w + 2)).join(m) + r;
   const render = (cells: string[]) =>
-    `│${cells.map((c, i) => ` ${pad(c, widths[i], cols[i].align)} `).join('│')}│`;
+    `│${cells.map((c, i) => ` ${pad(truncate(c ?? '', widths[i]), widths[i], cols[i].align)} `).join('│')}│`;
   const out: string[] = [];
   out.push(line('┌', '┬', '┐'));
   out.push(render(cols.map((c) => c.header)));
@@ -79,6 +120,19 @@ function boxTable(
   for (const r of rows) out.push(render(r));
   out.push(line('└', '┴', '┘'));
   return out;
+}
+
+const PATH_COLS: BoxCol[] = [
+  { header: 'TTL', align: 'right', min: 3, max: 5, flex: 0 },
+  { header: 'IP', min: 8, max: 36, flex: 3 },
+  { header: 'ASN', min: 6, max: 11, flex: 0 },
+  { header: 'Company', min: 14, max: 50, flex: 7 },
+  { header: 'Avg RTT', align: 'right', min: 8, max: 12, flex: 0 },
+];
+
+function asPath(hops: TraceReport['hops']): string {
+  const seq = hops.map((h) => (h.asn ? `AS${h.asn}` : '?')).join(' ▸ ');
+  return seq || '—';
 }
 
 function statusLabel(reachable: boolean): string {
@@ -113,17 +167,12 @@ export function exportTraceText(report: TraceReport): string {
   lines.push(
     kv('RTT', `min ${fmtRtt(report.ping.minRtt)} · avg ${fmtRtt(report.ping.avgRtt)} · max ${fmtRtt(report.ping.maxRtt)}`)
   );
+  lines.push(kv('Path', `${report.hops.length} hops — ${report.hops.map((h) => h.ip ?? '*').join(' ▸ ')}`));
+  lines.push(kv('AS path', asPath(report.hops)));
   lines.push(kv('Path fingerprint', report.pathFingerprint || '—'));
   lines.push('');
   lines.push(section('HOPS'));
   lines.push('');
-  const cols = [
-    { header: 'TTL', width: 5, align: 'right' as const },
-    { header: 'IP', width: 24 },
-    { header: 'ASN', width: 9 },
-    { header: 'Company', width: 24 },
-    { header: 'Avg RTT', width: 10, align: 'right' as const },
-  ];
   const rows = report.hops.map((h) => [
     String(h.ttl),
     h.ip ?? '*',
@@ -134,7 +183,7 @@ export function exportTraceText(report: TraceReport): string {
   if (rows.length === 0) {
     lines.push('  No hops captured (unreachable).');
   } else {
-    lines.push(...boxTable(cols, rows));
+    lines.push(...boxTable(PATH_COLS, rows));
   }
   lines.push('');
   lines.push(rep('═', W));
@@ -210,16 +259,10 @@ export function buildDestinationTextReport(input: DestinationReportInput): strin
     if (latest.error) lines.push(kv('Error', latest.error));
     const path = latest.hops.map((h) => h.ip ?? '*').join(' ▸ ');
     lines.push(kv('Path', `${latest.hops.length} hops — ${path}`));
+    lines.push(kv('AS path', asPath(latest.hops)));
     lines.push('');
     lines.push(section('NETWORK PATH · HOP-BY-HOP'));
     lines.push('');
-    const cols = [
-      { header: 'TTL', width: 5, align: 'right' as const },
-      { header: 'IP', width: 24 },
-      { header: 'ASN', width: 9 },
-      { header: 'Company', width: 24 },
-      { header: 'Avg RTT', width: 10, align: 'right' as const },
-    ];
     const rows = latest.hops.map((h) => [
       String(h.ttl),
       h.ip ?? '*',
@@ -230,7 +273,7 @@ export function buildDestinationTextReport(input: DestinationReportInput): strin
     if (rows.length === 0) {
       lines.push('  No hops captured (unreachable).');
     } else {
-      lines.push(...boxTable(cols, rows));
+      lines.push(...boxTable(PATH_COLS, rows));
     }
     lines.push('');
   }
