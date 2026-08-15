@@ -4,7 +4,10 @@ import { api } from '../lib/api';
 import type { Destination, DestinationCategory } from '../lib/types';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
+import Pagination from '../components/Pagination';
 import { CATEGORY_LABEL } from '../lib/format';
+
+const PAGE_SIZE = 50;
 
 const emptyForm = {
   name: '',
@@ -26,11 +29,13 @@ export default function Destinations() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [enriching, setEnriching] = useState(false);
+  const [page, setPage] = useState(1);
 
   async function load() {
     try {
       setDests(await api.listDestinations());
       setError('');
+      setPage(1);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -136,6 +141,10 @@ export default function Destinations() {
 
   if (loading) return <Spinner label="Loading destinations…" />;
 
+  const pages = Math.max(1, Math.ceil(dests.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pages);
+  const paged = dests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -157,6 +166,9 @@ export default function Destinations() {
       {error && <div className="card border-red-500/40 text-red-600 dark:text-red-300">{error}</div>}
 
       <div className="card">
+        <div className="mb-3">
+          <Pagination page={currentPage} pages={pages} onPage={setPage} />
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -172,9 +184,9 @@ export default function Destinations() {
               </tr>
             </thead>
             <tbody>
-              {dests.map((d, i) => (
+              {paged.map((d, i) => (
                 <tr key={d._id} className="border-b border-edge/50 hover:bg-edge/30">
-                  <td className="td font-mono text-xs text-tx3">{i + 1}</td>
+                  <td className="td font-mono text-xs text-tx3">{(currentPage - 1) * PAGE_SIZE + i + 1}</td>
                   <td className="td font-medium">
                     {d.name}
                     <div className="text-xs text-tx3">{d.description}</div>
@@ -214,6 +226,9 @@ export default function Destinations() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="mt-3">
+          <Pagination page={currentPage} pages={pages} onPage={setPage} />
         </div>
       </div>
 

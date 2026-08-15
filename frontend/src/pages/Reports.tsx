@@ -8,9 +8,11 @@ import type { Destination, PeriodReport, ReportCompare, ReportPeriod, TraceRepor
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import StatCard from '../components/StatCard';
+import Pagination from '../components/Pagination';
 import { fmtDate, fmtRtt, periodTick } from '../lib/format';
 
 const PERIODS: ReportPeriod[] = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'yearly'];
+const PAGE_SIZE = 50;
 
 export default function Reports() {
   const [searchParams] = useSearchParams();
@@ -30,7 +32,8 @@ export default function Reports() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [sumSortKey, setSumSortKey] = useState<string>('uptime');
   const [sumSortDir, setSumSortDir] = useState<'asc' | 'desc'>('desc');
-  const limit = 25;
+  const [sumPage, setSumPage] = useState(1);
+  const limit = 50;
 
   function toggleSort(key: string) {
     if (sortKey === key) {
@@ -75,6 +78,10 @@ export default function Reports() {
     });
     return arr;
   }, [report, sumSortKey, sumSortDir]);
+
+  const sumPages = Math.max(1, Math.ceil(sortedSummary.length / PAGE_SIZE));
+  const sumCurrentPage = Math.min(sumPage, sumPages);
+  const pagedSummary = sortedSummary.slice((sumCurrentPage - 1) * PAGE_SIZE, sumCurrentPage * PAGE_SIZE);
 
   const sortedReports = useMemo(() => {
     const arr = [...reports];
@@ -142,6 +149,10 @@ export default function Reports() {
     if (tab === 'summary') loadPeriod();
     else loadReports();
   }, [tab, loadPeriod, loadReports]);
+
+  useEffect(() => {
+    setSumPage(1);
+  }, [period, destinationId]);
 
   const pages = Math.max(1, Math.ceil(total / limit));
   const overall = report?.overall;
@@ -281,6 +292,9 @@ export default function Reports() {
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">
                 Destinations — {period} ({report.destinations.length})
               </h2>
+              <div className="mb-3">
+                <Pagination page={sumCurrentPage} pages={sumPages} onPage={setSumPage} />
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -317,9 +331,9 @@ export default function Reports() {
                     {sortedSummary.length === 0 && (
                       <tr><td className="td" colSpan={6}>No destinations matched in this period.</td></tr>
                     )}
-                    {sortedSummary.map((d, i) => (
+                    {pagedSummary.map((d, i) => (
                       <tr key={d.destinationId} className="border-b border-edge/50 hover:bg-edge/30">
-                        <td className="td font-mono text-xs text-tx3">{i + 1}</td>
+                        <td className="td font-mono text-xs text-tx3">{(sumCurrentPage - 1) * PAGE_SIZE + i + 1}</td>
                         <td className="td font-medium">
                           <Link to={`/destination/${d.destinationId}`} className="hover:text-accent">
                             {d.name}
@@ -342,6 +356,9 @@ export default function Reports() {
                   </tbody>
                 </table>
               </div>
+              <div className="mt-3">
+                <Pagination page={sumCurrentPage} pages={sumPages} onPage={setSumPage} />
+              </div>
             </div>
           </div>
         )
@@ -349,6 +366,9 @@ export default function Reports() {
         <Spinner label="Loading reports…" />
       ) : (
         <div className="card">
+          <div className="mb-3">
+            <Pagination page={page} pages={pages} onPage={setPage} />
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -418,12 +438,8 @@ export default function Reports() {
             </table>
           </div>
 
-          <div className="mt-4 flex items-center justify-between">
-            <span className="text-xs text-tx3">Page {page} of {pages}</span>
-            <div className="flex gap-2">
-              <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-              <button className="btn-ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</button>
-            </div>
+          <div className="mt-4">
+            <Pagination page={page} pages={pages} onPage={setPage} />
           </div>
         </div>
       )}

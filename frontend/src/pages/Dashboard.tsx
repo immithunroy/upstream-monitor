@@ -8,9 +8,11 @@ import type { PeriodReport, ReportPeriod, Stats, TraceReport } from '../lib/type
 import StatCard from '../components/StatCard';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
+import Pagination from '../components/Pagination';
 import { fmtAgo, fmtRtt, periodTick } from '../lib/format';
 
 const PERIODS: ReportPeriod[] = ['daily', 'weekly', 'monthly', 'quarterly', 'half-yearly', 'yearly'];
+const PAGE_SIZE = 50;
 
 type SortKey = 'name' | 'asn' | 'avgRtt' | 'loss' | 'hops' | 'ran';
 type SortDir = 'asc' | 'desc';
@@ -27,6 +29,7 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [page, setPage] = useState(1);
 
   async function load() {
     try {
@@ -94,6 +97,10 @@ export default function Dashboard() {
     });
     return arr;
   }, [latest, sortKey, sortDir]);
+
+  const pages = Math.max(1, Math.ceil(sortedLatest.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pages);
+  const pagedLatest = sortedLatest.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   if (error && !stats) {
     return (
@@ -207,6 +214,9 @@ export default function Dashboard() {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">
           Latest per-destination status
         </h2>
+        <div className="mb-3">
+          <Pagination page={currentPage} pages={pages} onPage={setPage} />
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -253,9 +263,9 @@ export default function Dashboard() {
                   </td>
                 </tr>
               )}
-              {sortedLatest.map((r, i) => (
+              {pagedLatest.map((r, i) => (
                 <tr key={r._id} className="border-b border-edge/50 hover:bg-edge/30">
-                  <td className="td font-mono text-xs text-tx3">{i + 1}</td>
+                  <td className="td font-mono text-xs text-tx3">{(currentPage - 1) * PAGE_SIZE + i + 1}</td>
                   <td className="td font-medium">
                     <Link to={`/destination/${r.destinationId}`} className="hover:text-accent">
                       {r.destName || r.destHost}
@@ -281,6 +291,9 @@ export default function Dashboard() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="mt-3">
+          <Pagination page={currentPage} pages={pages} onPage={setPage} />
         </div>
       </div>
     </div>
