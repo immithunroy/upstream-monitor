@@ -33,6 +33,8 @@ export default function Reports() {
   const [sumSortKey, setSumSortKey] = useState<string>('uptime');
   const [sumSortDir, setSumSortDir] = useState<'asc' | 'desc'>('desc');
   const [sumPage, setSumPage] = useState(1);
+  const [sumQuery, setSumQuery] = useState('');
+  const [query, setQuery] = useState('');
   const limit = 50;
 
   function toggleSort(key: string) {
@@ -54,7 +56,13 @@ export default function Reports() {
   }
 
   const sortedSummary = useMemo(() => {
-    const arr = [...(report?.destinations ?? [])];
+    const q = sumQuery.trim().toLowerCase();
+    const arr = q
+      ? (report?.destinations ?? []).filter((d) => {
+          const hay = [d.name, d.host, String(d.asn ?? ''), d.company || ''].join(' ').toLowerCase();
+          return hay.includes(q);
+        })
+      : [...(report?.destinations ?? [])];
     arr.sort((a, b) => {
       let cmp = 0;
       switch (sumSortKey) {
@@ -77,7 +85,7 @@ export default function Reports() {
       return sumSortDir === 'asc' ? cmp : -cmp;
     });
     return arr;
-  }, [report, sumSortKey, sumSortDir]);
+  }, [report, sumSortKey, sumSortDir, sumQuery]);
 
   const sumPages = Math.max(1, Math.ceil(sortedSummary.length / PAGE_SIZE));
   const sumCurrentPage = Math.min(sumPage, sumPages);
@@ -133,13 +141,18 @@ export default function Reports() {
   const loadReports = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.listReports({ destinationId: destinationId || undefined, page, limit });
+      const res = await api.listReports({
+        destinationId: destinationId || undefined,
+        search: query.trim() || undefined,
+        page,
+        limit,
+      });
       setReports(res.data);
       setTotal(res.total);
     } finally {
       setLoading(false);
     }
-  }, [destinationId, page]);
+  }, [destinationId, page, query]);
 
   useEffect(() => {
     loadDests();
@@ -153,6 +166,14 @@ export default function Reports() {
   useEffect(() => {
     setSumPage(1);
   }, [period, destinationId]);
+
+  useEffect(() => {
+    setSumPage(1);
+  }, [sumQuery]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
 
   const pages = Math.max(1, Math.ceil(total / limit));
   const overall = report?.overall;
@@ -292,7 +313,13 @@ export default function Reports() {
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">
                 Destinations — {period} ({report.destinations.length})
               </h2>
-              <div className="mb-3">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <input
+                  className="input max-w-xs"
+                  placeholder="Search name, host, ASN, company…"
+                  value={sumQuery}
+                  onChange={(e) => setSumQuery(e.target.value)}
+                />
                 <Pagination page={sumCurrentPage} pages={sumPages} onPage={setSumPage} />
               </div>
               <div className="overflow-x-auto">
@@ -366,7 +393,13 @@ export default function Reports() {
         <Spinner label="Loading reports…" />
       ) : (
         <div className="card">
-          <div className="mb-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <input
+              className="input max-w-xs"
+              placeholder="Search name, host, ASN, company…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
             <Pagination page={page} pages={pages} onPage={setPage} />
           </div>
           <div className="overflow-x-auto">

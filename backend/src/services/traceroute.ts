@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import net from 'node:net';
 import os from 'node:os';
 import { getSettingNumber } from './settings';
 import type { PingResult, TraceHop } from '../models/TraceReport';
@@ -98,9 +99,10 @@ function parsePingWindows(out: string): PingResult {
 export async function runPing(host: string): Promise<PingResult> {
   const pingCount = getSettingNumber('pingCount', 10);
   const pingTimeoutMs = getSettingNumber('pingTimeoutMs', 2500);
+  const ipv6 = net.isIP(host) === 6;
   const args = isWindows
-    ? ['-n', String(pingCount), '-w', String(pingTimeoutMs), host]
-    : ['-c', String(pingCount), '-W', String(Math.round(pingTimeoutMs / 1000)), host];
+    ? ['-n', String(pingCount), '-w', String(pingTimeoutMs), ...(ipv6 ? ['-6'] : []), host]
+    : ['-c', String(pingCount), '-W', String(Math.round(pingTimeoutMs / 1000)), ...(ipv6 ? ['-6'] : []), host];
   const out = await run('ping', args, pingCount * pingTimeoutMs + 5000);
   return isWindows ? parsePingWindows(out) : parsePingLinux(out);
 }
@@ -108,8 +110,20 @@ export async function runPing(host: string): Promise<PingResult> {
 /* ---------------------------- TRACEROUTE ---------------------------- */
 
 const HOP_RE = /^\s*(\d+)\s+(.*)$/;
-const IP_RE = /\b(?:\d{1,3}\.){3}\d{1,3}\b/;
 const MS_RE = /([\d.,]+)\s*ms/g;
+
+/**
+ * Extract the first IPv4 or IPv6 address from a traceroute line. Uses
+ * node:net.isIP so both families (including compressed IPv6 like `2001:db8::1`
+ * and link-local zones) are recognised without fragile regexes.
+ */
+function extractIp(rest: string): string | null {
+  for (const tok of rest.split(/\s+/)) {
+    const clean = tok.replace(/%[0-9a-zA-Z]+$/, '');
+    if (net.isIP(clean) === 4 || net.isIP(clean) === 6) return clean;
+  }
+  return null;
+}
 
 export function parseLinuxLine(line: string): TraceHop | null {
   const m = line.match(HOP_RE);
@@ -119,9 +133,8 @@ export function parseLinuxLine(line: string): TraceHop | null {
   if (rest.trim().startsWith('*')) {
     return { ttl, ip: null, host: null, status: 'unreachable', rtts: [], avgRtt: null, asn: null, company: '' };
   }
-  const ipMatch = rest.match(IP_RE);
-  const ip = ipMatch ? ipMatch[0] : null;
-  const host = ip ? rest.split(' ')[0] : rest.trim().split(' ')[0];
+  const ip = extractIp(rest);
+  const host = ip ?? rest.trim().split(/\s+/)[0] ?? null;
   const rtts = Array.from(rest.matchAll(MS_RE)).map((x) => num(x[1]) as number).filter((v) => v !== null);
   return {
     ttl,
@@ -140,11 +153,10 @@ function parseWindowsLine(line: string): TraceHop | null {
   if (!m) return null;
   const ttl = Number(m[1]);
   const rest = m[2].trim();
-  const ipMatch = rest.match(IP_RE);
-  if (!ipMatch) {
+  const ip = extractIp(rest);
+  if (!ip) {
     return { ttl, ip: null, host: null, status: 'unreachable', rtts: [], avgRtt: null, asn: null, company: '' };
   }
-  const ip = ipMatch[0];
   const rtts = Array.from(rest.matchAll(/(?:<1|\d+)\s*ms/g)).map((x) =>
     x[0].startsWith('<') ? 1 : Number.parseFloat(x[0])
   );
@@ -163,9 +175,11 @@ function parseWindowsLine(line: string): TraceHop | null {
 export async function runTraceroute(host: string): Promise<TraceHop[]> {
   const traceMaxHops = getSettingNumber('traceMaxHops', 30);
   const traceTimeoutSeconds = getSettingNumber('traceTimeoutSeconds', 4);
+  const ipv6 = net.isIP(host) === 6;
   const args = isWindows
-    ? ['-d', '-h', String(traceMaxHops), '-w', String(traceTimeoutSeconds), host]
+    ? ['-6', '-d', '-h', String(traceMaxHops), '-w', String(traceTimeoutSeconds), host]
     : [
+        ...(ipv6 ? ['-6'] : []),
         // ICMP echo mode (-I): the destination answers ICMP (ping works) but may
         // silently drop UDP traceroute probes, which would hide the final hop.
         '-I',

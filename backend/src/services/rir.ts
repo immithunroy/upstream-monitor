@@ -1,4 +1,5 @@
 import dns from 'node:dns/promises';
+import net from 'node:net';
 import { getSettingNumber } from './settings';
 
 /**
@@ -30,13 +31,43 @@ function requestTimeoutMs(): number {
 
 export async function resolveIp(host: string): Promise<string | null> {
   const trimmed = host.trim();
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(trimmed)) return trimmed;
+  if (net.isIP(trimmed) === 4 || net.isIP(trimmed) === 6) return trimmed;
   try {
-    const { address } = await dns.lookup(trimmed, { family: 4 });
-    return address || null;
+    const lookup = await dns.lookup(trimmed, { all: true });
+    return lookup[0]?.address ?? null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Expand an IPv6 address to its full 32-hex-digit form (no colons), so the
+ * team-cymru origin6 reverse-DNS lookup can reverse it nibble by nibble.
+ */
+function expandIpv6(ip: string): string {
+  let s = ip.split('%')[0].toLowerCase();
+  const lastColon = s.lastIndexOf(':');
+  if (lastColon >= 0) {
+    const tail = s.slice(lastColon + 1);
+    if (tail.includes('.')) {
+      const [a, b, c, d] = tail.split('.').map((x) => Number(x));
+      const hex =
+        ((a << 8) | b).toString(16).padStart(4, '0') +
+        ((c << 8) | d).toString(16).padStart(4, '0');
+      s = s.slice(0, lastColon + 1) + hex;
+    }
+  }
+  if (s.includes('::')) {
+    const [left, right] = s.split('::');
+    const leftParts = left ? left.split(':') : [];
+    const rightParts = right ? right.split(':') : [];
+    const missing = 8 - leftParts.length - rightParts.length;
+    const parts = [...leftParts, ...Array(Math.max(0, missing)).fill('0000'), ...rightParts].map((p) =>
+      p.padStart(4, '0')
+    );
+    return parts.join('');
+  }
+  return s.split(':').map((p) => p.padStart(4, '0')).join('');
 }
 
 /**
@@ -98,9 +129,15 @@ export function parseRdapOrg(data: unknown): string | null {
 }
 
 async function cymruLookup(ip: string): Promise<Omit<AsnInfo, 'ip'> | null> {
-  const reversed = ip.split('.').reverse().join('.');
+  const v6 = net.isIP(ip) === 6;
+  // IPv4: 1.2.3.4 -> 4.3.2.1.origin.asn.cymru.com
+  // IPv6: expanded nibbles reversed -> ...origin6.asn.cymru.com
+  const reversed = v6
+    ? expandIpv6(ip).split('').reverse().join('.')
+    : ip.split('.').reverse().join('.');
+  const zone = v6 ? 'origin6' : 'origin';
   try {
-    const txt = await dns.resolveTxt(`${reversed}.origin.asn.cymru.com`);
+    const txt = await dns.resolveTxt(`${reversed}.${zone}.asn.cymru.com`);
     const parts = txt.flat();
     if (parts.length === 0) return null;
     const line = parts.find((p) => p.includes('|'));

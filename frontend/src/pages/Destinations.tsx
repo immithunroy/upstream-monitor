@@ -30,6 +30,7 @@ export default function Destinations() {
   const [saving, setSaving] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [page, setPage] = useState(1);
+  const [query, setQuery] = useState('');
 
   async function load() {
     try {
@@ -46,6 +47,10 @@ export default function Destinations() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
 
   // Open the edit modal directly when navigating here with ?edit=<id>.
   useEffect(() => {
@@ -141,9 +146,23 @@ export default function Destinations() {
 
   if (loading) return <Spinner label="Loading destinations…" />;
 
-  const pages = Math.max(1, Math.ceil(dests.length / PAGE_SIZE));
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? dests.filter((d) => {
+        const hay = [
+          d.name,
+          d.host,
+          String(d.asn ?? ''),
+          d.company || '',
+          d.location || '',
+          d.region || '',
+        ].join(' ').toLowerCase();
+        return hay.includes(q);
+      })
+    : dests;
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
-  const paged = dests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <div className="space-y-4">
@@ -166,7 +185,13 @@ export default function Destinations() {
       {error && <div className="card border-red-500/40 text-red-600 dark:text-red-300">{error}</div>}
 
       <div className="card">
-        <div className="mb-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <input
+            className="input max-w-xs"
+            placeholder="Search name, host, ASN, company, location…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           <Pagination page={currentPage} pages={pages} onPage={setPage} />
         </div>
         <div className="overflow-x-auto">

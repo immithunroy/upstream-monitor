@@ -78,9 +78,10 @@ export const api = {
   enrichDestinations: () =>
     request<{ total: number; enriched: number; failed: number }>('/destinations/enrich', { method: 'POST' }),
 
-  listReports: (params?: { destinationId?: string; page?: number; limit?: number }) => {
+  listReports: (params?: { destinationId?: string; search?: string; page?: number; limit?: number }) => {
     const qs = new URLSearchParams();
     if (params?.destinationId) qs.set('destinationId', params.destinationId);
+    if (params?.search) qs.set('search', params.search);
     if (params?.page) qs.set('page', String(params.page));
     if (params?.limit) qs.set('limit', String(params.limit));
     return request<Paginated<TraceReport>>(`/reports?${qs.toString()}`);

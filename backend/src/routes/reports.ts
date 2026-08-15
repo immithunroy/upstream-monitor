@@ -20,9 +20,15 @@ function validPeriod(p: string): boolean {
 }
 
 router.get('/', async (req, res) => {
-  const { destinationId, page = '1', limit = '50', from, to } = req.query;
+  const { destinationId, page = '1', limit = '50', from, to, search } = req.query;
   const where: Record<string, unknown> = {};
   if (destinationId) where.destinationId = destinationId;
+  if (search) {
+    where.OR = [
+      { destName: { contains: String(search), mode: 'insensitive' } },
+      { destHost: { contains: String(search), mode: 'insensitive' } },
+    ];
+  }
   if (from || to) {
     where.startedAt = {};
     if (from) (where.startedAt as Record<string, unknown>).gte = new Date(from as string);

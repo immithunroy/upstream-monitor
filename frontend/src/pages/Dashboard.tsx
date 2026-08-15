@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [page, setPage] = useState(1);
+  const [query, setQuery] = useState('');
 
   async function load() {
     try {
@@ -60,6 +61,10 @@ export default function Dashboard() {
     loadPeriod();
   }, [period]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -70,7 +75,18 @@ export default function Dashboard() {
   }
 
   const sortedLatest = useMemo(() => {
-    const arr = [...latest];
+    const q = query.trim().toLowerCase();
+    const arr = q
+      ? latest.filter((r) => {
+          const hay = [
+            r.destName || '',
+            r.destHost,
+            String(r.asn ?? ''),
+            r.company || '',
+          ].join(' ').toLowerCase();
+          return hay.includes(q);
+        })
+      : [...latest];
     arr.sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
@@ -96,7 +112,7 @@ export default function Dashboard() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return arr;
-  }, [latest, sortKey, sortDir]);
+  }, [latest, sortKey, sortDir, query]);
 
   const pages = Math.max(1, Math.ceil(sortedLatest.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
@@ -214,7 +230,13 @@ export default function Dashboard() {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-tx3">
           Latest per-destination status
         </h2>
-        <div className="mb-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <input
+            className="input max-w-xs"
+            placeholder="Search name, host, ASN, company…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           <Pagination page={currentPage} pages={pages} onPage={setPage} />
         </div>
         <div className="overflow-x-auto">
