@@ -151,7 +151,7 @@ jobs:
             set -e
             cd /opt/upstrean-monitor
             echo "== freeing disk before pull =="
-            # Remove all of this project's stale images (in-use ones are kept
+            # Remove all stale images of this project (in-use ones are kept
             # automatically), plus unreferenced dangling images and the shared
             # build cache. Running containers are untouched.
             docker image prune -f --filter "reference=ghcr.io/immithunroy/upstream-monitor-*" || true
