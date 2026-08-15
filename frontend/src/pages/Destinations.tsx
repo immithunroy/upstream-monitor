@@ -123,14 +123,22 @@ export default function Destinations() {
   }
 
   async function toggle(d: Destination) {
-    await api.updateDestination(d._id, { enabled: !d.enabled });
-    await load();
+    try {
+      await api.updateDestination(d._id, { enabled: !d.enabled });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
 
   async function remove(d: Destination) {
     if (!window.confirm(`Delete ${d.name} (${d.host})?`)) return;
-    await api.deleteDestination(d._id);
-    await load();
+    try {
+      await api.deleteDestination(d._id);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
 
   async function traceNow(d: Destination) {
