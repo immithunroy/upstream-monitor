@@ -44,15 +44,53 @@ function num(v: string | undefined): number | null {
  * an AAAA record (or an IPv6 literal wrapped in brackets) would otherwise be
  * probed over IPv4 and fail. Resolving first guarantees the `-6` family flag is
  * applied for IPv6 targets while keeping hostname destinations working.
+ *
+ * Lookups are bounded to 3s and cached for 60s so a slow or unreachable DNS
+ * server can never stall the ping sweep or a trace.
  */
+const dnsCache = new Map<string, { ip: string; at: number }>();
+
+function lookupWithTimeout(hostname: string, timeoutMs: number): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (!done) {
+        done = true;
+        reject(new Error('DNS lookup timed out'));
+      }
+    }, timeoutMs);
+    dns
+      .lookup(hostname, { all: true })
+      .then((addrs) => {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          resolve(addrs.map((a) => a.address));
+        }
+      })
+      .catch((err) => {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          reject(err);
+        }
+      });
+  });
+}
+
 async function resolveHost(host: string): Promise<string> {
   let h = host.trim();
   if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1);
   if (net.isIP(h) === 4 || net.isIP(h) === 6) return h;
+  const cached = dnsCache.get(h);
+  if (cached && Date.now() - cached.at < 60_000) return cached.ip;
   try {
-    const lookups = await dns.lookup(h, { all: true });
-    return lookups[0]?.address ?? h;
+    const addrs = await lookupWithTimeout(h, 3000);
+    const ip = addrs[0] ?? h;
+    dnsCache.set(h, { ip, at: Date.now() });
+    return ip;
   } catch {
+    dnsCache.set(h, { ip: h, at: Date.now() });
     return h;
   }
 }
