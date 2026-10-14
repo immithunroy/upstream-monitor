@@ -1,4 +1,5 @@
-import express from 'express';
+import './lib/asyncErrors';
+import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import { connectDb } from './config/db';
 import { env } from './config/env';
@@ -29,11 +30,29 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+// Last-resort error handler: a failed request returns JSON instead of crashing the process.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const e = err as { code?: string; status?: number; message?: string };
+  if (e?.code === 'P2025') {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  const status = e?.status && e.status >= 400 && e.status < 600 ? e.status : 500;
+  if (status >= 500) console.error('[server] request failed:', e?.message || err);
+  if (!res.headersSent) res.status(status).json({ error: status >= 500 ? 'Internal server error' : e?.message || 'Bad request' });
+});
+
+// Background jobs must never take the API down.
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] unhandled rejection:', (reason as Error)?.message || reason);
+});
+
 async function main(): Promise<void> {
   try {
     await connectDb();
   } catch (err) {
-    console.error('[server] failed to connect to MongoDB:', (err as Error).message);
+    console.error('[server] failed to connect to the database:', (err as Error).message);
     process.exit(1);
   }
 
@@ -41,7 +60,9 @@ async function main(): Promise<void> {
   await seedDestinations();
 
   // RIR ASN/company enrichment for the freshly seeded targets, in the background.
-  void import('./services/seed').then(({ seedEnrichment }) => seedEnrichment());
+  void import('./services/seed')
+    .then(({ seedEnrichment }) => seedEnrichment())
+    .catch((err) => console.error('[server] seed enrichment failed:', (err as Error).message));
 
   const server = app.listen(env.port, () => {
     console.log(`[server] Upstream Monitoring API listening on port ${env.port}`);

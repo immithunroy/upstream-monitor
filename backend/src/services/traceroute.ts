@@ -161,7 +161,7 @@ export async function runPing(host: string): Promise<PingResult> {
   const ipv6 = net.isIP(target) === 6;
   const args = isWindows
     ? ['-n', String(pingCount), '-w', String(pingTimeoutMs), ...(ipv6 ? ['-6'] : []), target]
-    : ['-c', String(pingCount), '-W', String(Math.round(pingTimeoutMs / 1000)), ...(ipv6 ? ['-6'] : []), target];
+    : ['-c', String(pingCount), '-W', String(Math.max(1, Math.round(pingTimeoutMs / 1000))), ...(ipv6 ? ['-6'] : []), target];
   const out = await run('ping', args, pingCount * pingTimeoutMs + 5000);
   return isWindows ? parsePingWindows(out) : parsePingLinux(out);
 }
@@ -189,10 +189,12 @@ export function parseLinuxLine(line: string): TraceHop | null {
   if (!m) return null;
   const ttl = Number(m[1]);
   const rest = m[2];
-  if (rest.trim().startsWith('*')) {
+  const ip = extractIp(rest);
+  // "*  10.0.0.1  5 ms" (first probe lost, second answered) is a responding hop;
+  // only a line with no address at all is unreachable.
+  if (!ip && rest.trim().startsWith('*')) {
     return { ttl, ip: null, host: null, status: 'unreachable', rtts: [], avgRtt: null, asn: null, company: '' };
   }
-  const ip = extractIp(rest);
   const host = ip ?? rest.trim().split(/\s+/)[0] ?? null;
   const rtts = Array.from(rest.matchAll(MS_RE)).map((x) => num(x[1]) as number).filter((v) => v !== null);
   return {
@@ -237,7 +239,7 @@ export async function runTraceroute(host: string): Promise<TraceHop[]> {
   const traceTimeoutSeconds = getSettingNumber('traceTimeoutSeconds', 4);
   const ipv6 = net.isIP(target) === 6;
   const args = isWindows
-    ? ['-6', '-d', '-h', String(traceMaxHops), '-w', String(traceTimeoutSeconds), target]
+    ? [...(ipv6 ? ['-6'] : ['-4']), '-d', '-h', String(traceMaxHops), '-w', String(traceTimeoutSeconds * 1000), target]
     : [
         ...(ipv6 ? ['-6'] : []),
         // ICMP echo mode (-I): the destination answers ICMP (ping works) but may
@@ -272,6 +274,9 @@ function fingerprint(hops: TraceHop[]): string {
 export async function runTrace(host: string): Promise<TraceOutcome> {
   const target = await resolveHost(host);
   const [ping, hops] = await Promise.all([runPing(target), runTraceroute(target)]);
-  const reachable = ping.packetsReceived > 0 || hops.some((h) => h.status === 'reachable');
+  // Reachable = the destination itself answered (ping, or the final traceroute hop
+  // is the target). An intermediate router answering does not mean the target is up.
+  const last = [...hops].reverse().find((h) => h.ip);
+  const reachable = ping.packetsReceived > 0 || (!!last && last.ip === target);
   return { reachable, ping, hops, pathFingerprint: fingerprint(hops) };
 }

@@ -170,7 +170,7 @@ export async function traceDestination(dest: DestinationLike, triggeredBy: 'sche
       reachable: report.reachable,
       hops: report.hops,
     },
-    changeEvent: changeEventId ? { id: changeEventId, changes: [] } : null,
+    changeEvent: changeEventId ? { id: changeEventId, changes: Array.from({ length: changeCount }, () => ({ type: 'change' })) } : null,
   };
 }
 

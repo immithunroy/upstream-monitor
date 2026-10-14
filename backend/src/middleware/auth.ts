@@ -1,11 +1,13 @@
 import crypto from 'node:crypto';
 import { NextFunction, Request, Response } from 'express';
 import { env } from '../config/env';
+import { adminPasswordVersion } from '../services/settings';
 
 export interface AdminTokenPayload {
   sub: string;
   iat: number;
   exp: number;
+  pv?: string;
 }
 
 function sign(payload: AdminTokenPayload): string {
@@ -17,7 +19,7 @@ function sign(payload: AdminTokenPayload): string {
 export function issueAdminToken(): { token: string; expiresAt: number } {
   const iat = Math.floor(Date.now() / 1000);
   const exp = iat + env.adminTokenTtlSeconds;
-  return { token: sign({ sub: 'admin', iat, exp }), expiresAt: exp * 1000 };
+  return { token: sign({ sub: 'admin', iat, exp, pv: adminPasswordVersion() }), expiresAt: exp * 1000 };
 }
 
 export function verifyAdminToken(token: string): boolean {
@@ -31,7 +33,7 @@ export function verifyAdminToken(token: string): boolean {
   if (!crypto.timingSafeEqual(sigBuf, expBuf)) return false;
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString()) as AdminTokenPayload;
-    return payload.sub === 'admin' && payload.exp > Math.floor(Date.now() / 1000);
+    return payload.sub === 'admin' && payload.exp > Math.floor(Date.now() / 1000) && payload.pv === adminPasswordVersion();
   } catch {
     return false;
   }

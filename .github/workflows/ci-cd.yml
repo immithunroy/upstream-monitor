@@ -49,6 +49,10 @@ jobs:
         working-directory: backend
         run: npm run test:comparator
 
+      - name: Backend traceroute parser + review fix tests
+        working-directory: backend
+        run: npm run test:traceroute && npm run test:review
+
       - name: Backend build
         working-directory: backend
         run: npm run build
