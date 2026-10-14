@@ -4,6 +4,15 @@ import { runScheduledTrace } from './orchestrator';
 import { runPingSweep } from './pingMonitor';
 import { runRetention } from './retention';
 
+/** Cron for "every N minutes". The step form (star-slash-N) is only valid for N < 60; larger values
+ *  (Settings allows up to 1440) made cron.schedule throw and crash startup. */
+export function pingCronExpression(minutes: number): string {
+  const n = Math.max(1, Math.round(minutes));
+  if (n < 60) return `*/${n} * * * *`;
+  const hours = Math.max(1, Math.min(24, Math.round(n / 60)));
+  return hours >= 24 ? '0 0 * * *' : `0 */${hours} * * *`;
+}
+
 let traceTask: cron.ScheduledTask | null = null;
 let pingTask: cron.ScheduledTask | null = null;
 let retentionTask: cron.ScheduledTask | null = null;
@@ -31,7 +40,7 @@ export function startScheduler(): void {
 
   /* Frequent latency sampling — default every 5 minutes */
   if (!pingTask) {
-    pingTask = cron.schedule(`*/${pingIntervalMinutes} * * * *`, async () => {
+    pingTask = cron.schedule(pingCronExpression(pingIntervalMinutes), async () => {
       try {
         await runPingSweep();
       } catch (err) {

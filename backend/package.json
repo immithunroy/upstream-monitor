@@ -14,6 +14,7 @@
     "test:comparator": "tsx scripts/test-comparator.ts",
     "test:rir": "tsx scripts/test-rir.ts",
     "test:traceroute": "tsx scripts/test-traceroute.ts",
+    "test:review": "tsx scripts/test-review.ts",
     "db:migrate": "prisma migrate deploy",
     "db:migrate-dev": "prisma migrate dev",
     "db:generate": "prisma generate",

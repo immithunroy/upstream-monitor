@@ -36,10 +36,10 @@ export async function enrichDestinationHost(host: string): Promise<{
 
 /** Enrich a single destination record if it is stale. */
 export async function maybeEnrichDestination(destId: string, host: string): Promise<void> {
-  const dest = await prisma.destination.findUnique({ where: { id: destId }, select: { enrichedAt: true } });
-  if (!dest) return;
-  if (!isStale(dest.enrichedAt)) return;
   try {
+    const dest = await prisma.destination.findUnique({ where: { id: destId }, select: { enrichedAt: true } });
+    if (!dest) return;
+    if (!isStale(dest.enrichedAt)) return;
     const data = await enrichDestinationHost(host);
     await prisma.destination.update({
       where: { id: destId },
@@ -87,8 +87,10 @@ export async function ensureReportHopsEnriched(report: {
   if (!missing) return hops;
   const enriched = await enrichHops(hops);
   try {
-    await prisma.traceHop.deleteMany({ where: { reportId: String(report.id) } });
-    await prisma.traceHop.createMany({
+    // One transaction: a failed insert must not leave the report with no hops.
+    await prisma.$transaction([
+      prisma.traceHop.deleteMany({ where: { reportId: String(report.id) } }),
+      prisma.traceHop.createMany({
       data: enriched.map((h) => ({
         reportId: String(report.id),
         ttl: h.ttl,
@@ -100,7 +102,8 @@ export async function ensureReportHopsEnriched(report: {
         asn: h.asn,
         company: h.company,
       })),
-    });
+      }),
+    ]);
   } catch {
     /* persist failures are non-fatal on read paths */
   }

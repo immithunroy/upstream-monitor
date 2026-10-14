@@ -1,6 +1,7 @@
 import XLSX from 'xlsx';
 import prisma from '../config/prisma';
-import { enrichDestinationHost } from './enrich';
+import { enrichInBackground } from './enrichInBackground';
+import { cleanHost } from '../lib/hostValidation';
 
 export interface ImportResult {
   total: number;
@@ -97,7 +98,8 @@ export function parseImportBuffer(buffer: Buffer): ImportRow[] {
       location: String(get('location') ?? '').trim(),
       region: String(get('region') ?? '').trim(),
       description: String(get('description') ?? '').trim(),
-      enabled: toBool(get('enabled')) !== false,
+      // A blank Enabled cell means enabled (it used to import the row disabled).
+      enabled: String(get('enabled') ?? '').trim() === '' ? true : toBool(get('enabled')),
     });
   }
   return out;
@@ -135,12 +137,7 @@ export async function importDestinations(rows: ImportRow[]): Promise<ImportResul
         },
       });
       // Fire-and-forget RIR attribution for the new host.
-      void enrichDestinationHost(row.host).then((data) =>
-        prisma.destination.update({
-          where: { host: row.host },
-          data: { ...data, enrichedAt: new Date() },
-        })
-      );
+      enrichInBackground({ host: row.host }, row.host);
       result.created += 1;
     } catch (err) {
       if ((err as { code?: string }).code === 'P2002') {
@@ -158,6 +155,9 @@ export async function importDestinations(rows: ImportRow[]): Promise<ImportResul
 function validateRow(row: ImportRow): string | null {
   if (!row.name) return 'Missing "Name"';
   if (!row.host) return 'Missing "Host"';
+  const host = cleanHost(row.host);
+  if (!host) return `Invalid host "${row.host}" (expected an IP address or hostname)`;
+  row.host = host;
   if (!VALID_CATEGORIES.includes(row.category)) {
     return `Invalid category "${row.category}" (expected one of ${VALID_CATEGORIES.join(', ')})`;
   }

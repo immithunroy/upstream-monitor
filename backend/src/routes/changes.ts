@@ -8,8 +8,10 @@ const router = Router();
 router.get('/', async (req, res) => {
   const { destinationId, severity, page = '1', limit = '50', acknowledged } = req.query;
   const where: Record<string, unknown> = {};
-  if (destinationId) where.destinationId = destinationId;
-  if (severity) where.severity = severity;
+  // Repeated query params arrive as arrays, which Prisma rejects; use the first value.
+  const first = (v: unknown) => (Array.isArray(v) ? v[0] : v);
+  if (first(destinationId)) where.destinationId = String(first(destinationId));
+  if (first(severity)) where.severity = String(first(severity));
   if (acknowledged === 'true' || acknowledged === 'false') {
     where.acknowledged = acknowledged === 'true';
   }

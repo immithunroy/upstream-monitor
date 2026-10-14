@@ -125,7 +125,9 @@ export function compareReports(
   /* 2. Packet loss */
   if (prev.ping.lossPercent !== curr.ping.lossPercent) {
     const lossDelta = curr.ping.lossPercent - prev.ping.lossPercent;
-    if (Math.abs(lossDelta) > 0.5) {
+    // Use the configured PACKET_LOSS_THRESHOLD (was a hardcoded 0.5%, so one
+    // lost packet out of 10 raised a critical event).
+    if (Math.abs(lossDelta) >= getSettingNumber('packetLossThreshold', 5)) {
       changes.push({
         type: 'packet_loss',
         field: 'lossPercent',
@@ -249,12 +251,19 @@ export function compareReports(
     (c, i) => changes.findIndex((x) => x.type === c.type && x.hopTtl === c.hopTtl && x.field === c.field) === i
   );
 
+  // Only degradations are critical: becoming unreachable, loss going UP, or an
+  // AS change. A recovery or lower loss is good news (reported as a warning).
   const critical = unique.some(
-    (c) => c.type === 'reachability' || c.type === 'packet_loss' || c.type === 'hop_as_change'
+    (c) =>
+      (c.type === 'reachability' && c.newValue === false) ||
+      (c.type === 'packet_loss' && Number(c.newValue) > Number(c.oldValue)) ||
+      c.type === 'hop_as_change'
   );
   const warning =
     unique.some(
       (c) =>
+        c.type === 'reachability' ||
+        c.type === 'packet_loss' ||
         c.type === 'path' ||
         c.type === 'hop_ip_change' ||
         c.type === 'hop_added' ||

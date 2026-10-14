@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import prisma from '../config/prisma';
 import { env } from '../config/env';
 
@@ -119,9 +119,19 @@ export async function setSettings(patch: Record<string, SettingValue>): Promise<
     const err = validateSetting(key, value);
     if (err) throw new Error(err);
   }
-  for (const [key, value] of Object.entries(patch)) {
-    await setSetting(key, value);
-  }
+  // Really all-or-nothing: one transaction, cache updated only after commit.
+  const coerced = Object.entries(patch).map(([key, value]) => {
+    const t = SETTING_DEFS[key].type;
+    const v = t === 'string' || t === 'boolean' ? value : t === 'int' ? Math.round(Number(value)) : Number(value);
+    return [key, v] as const;
+  });
+  await prisma.$transaction(
+    coerced.map(([key, v]) =>
+      prisma.setting.upsert({ where: { key }, create: { key, value: v as never }, update: { value: v as never } })
+    )
+  );
+  for (const [key, v] of coerced) cache.set(key, v);
+  console.log('[settings] updated', Object.fromEntries(coerced));
   return getSettings();
 }
 
@@ -151,6 +161,13 @@ export function verifyAdminPassword(password: string): boolean {
   const stored = cache.get(SECRET_KEY);
   if (stored) return verifyHashedPassword(password, String(stored));
   return password === env.adminPassword;
+}
+
+/** Short fingerprint of the current admin password; embedded in tokens so a
+ *  password change signs out every existing session. */
+export function adminPasswordVersion(): string {
+  const stored = String(cache.get(SECRET_KEY) ?? `env:${env.adminPassword}`);
+  return createHash('sha256').update(stored).digest('hex').slice(0, 12);
 }
 
 /** Change the admin password and persist the hash. */

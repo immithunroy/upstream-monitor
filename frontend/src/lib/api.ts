@@ -1,4 +1,9 @@
-import { getToken } from './auth';
+import { getToken, setToken } from './auth';
+
+/** A 401 on an authenticated call means the session expired or was revoked. */
+function handleUnauthorized(res: Response): void {
+  if (res.status === 401 && getToken()) setToken(null);
+}
 import type {
   AppSettings, ChangeEvent, Destination, ImportResult, Paginated, PeriodReport, PingSample, ReportCompare,
   ReportPeriod, SearchResults, SettingsResponse, Stats, TraceReport, TrendPoint,
@@ -11,8 +16,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, { headers, ...options });
+  const res = await fetch(`${BASE}${path}`, { ...options, headers: { ...headers, ...(options?.headers as Record<string, string> | undefined) } });
   if (!res.ok) {
+    handleUnauthorized(res);
     const body = await res.json().catch(() => null);
     throw new Error((body as { error?: string } | null)?.error || `Request failed (${res.status})`);
   }
@@ -28,6 +34,7 @@ async function requestWithFile<T>(path: string, file: File): Promise<T> {
 
   const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: form });
   if (!res.ok) {
+    handleUnauthorized(res);
     const body = await res.json().catch(() => null);
     throw new Error((body as { error?: string } | null)?.error || `Request failed (${res.status})`);
   }

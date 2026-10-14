@@ -492,3 +492,10 @@ npm run test:comparator --prefix backend  # change-detection engine (AS path, IP
 ## License
 
 MIT.
+
+## Troubleshooting
+
+- **'Failed to reach the API: Request failed (502)'**: the frontend nginx could not reach `backend:5020`. Older images resolved `backend` once at nginx start, so after containers restarted in a different order nginx kept the old IP. Current images re-resolve through Docker DNS (`resolver 127.0.0.11`). On an old image, `docker restart upstream-frontend` fixes it.
+- The backend no longer crashes on a database error inside a request or a background job; it logs `[server] request failed` / `unhandled rejection` instead.
+- Admin login is limited to 10 failed attempts per IP per 15 minutes. Changing the admin password signs out all existing sessions.
+

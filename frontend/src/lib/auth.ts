@@ -9,8 +9,28 @@ export function setToken(token: string | null): void {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+/** Token expiry (ms) from its payload, or null when unreadable. */
+export function tokenExpiry(token: string): number | null {
+  try {
+    const body = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+    const exp = JSON.parse(atob(body)).exp;
+    return typeof exp === 'number' ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Signed in = a token that has not expired (an expired one used to keep the
+ *  admin UI visible while every action failed with 401). */
 export function isAuthed(): boolean {
-  return Boolean(getToken());
+  const token = getToken();
+  if (!token) return false;
+  const exp = tokenExpiry(token);
+  if (exp !== null && exp <= Date.now()) {
+    setToken(null);
+    return false;
+  }
+  return true;
 }
 
 export function logout(): void {
